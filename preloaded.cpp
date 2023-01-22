@@ -13,7 +13,7 @@
 using malloc_type = void*(*)(size_t);
 using free_type = void(*)(void*);
 
-static const size_t BUFFER_SIZE = 100000;
+static const size_t BUFFER_SIZE = 1000000;
 static const size_t LOG_BATCH_SIZE = 100;
 
 static int sizes_log[BUFFER_SIZE];
@@ -37,10 +37,8 @@ void* logging_thread_fn(void *arg) {
   (void) arg;
 
   while (true) {
-    printf("while loop start in logging thread (avail_num=%ld)\n", avail_num);
     pthread_mutex_lock(&mtx);
     while (avail_num == 0) {
-      printf("pthread_cond_wait(not_empty_cond)\n");
       pthread_cond_wait(&not_empty_cond, &mtx);
     }
 
@@ -50,18 +48,20 @@ void* logging_thread_fn(void *arg) {
       addrs_log_buffer[i] = addrs_log[avail_start + i];
     }
 
+    bool was_full = (avail_num == BUFFER_SIZE - 1);
     avail_start = (avail_start + sz) % BUFFER_SIZE;
 
     pthread_mutex_unlock(&mtx);
-    pthread_cond_signal(&not_full_cond);
+
+    if (was_full) {
+      pthread_cond_broadcast(&not_full_cond);
+    }
 
     std::ofstream ofs("heaplog." + std::to_string(getpid()) + ".log", std::ios::app);
     for (size_t i = 0; i < sz; i++) {
       ofs << addrs_log_buffer[i] << " " << sizes_log_buffer[i] << std::endl;
     }
     ofs.close();
-
-    printf("while loop end in logging thread (avail_num=%ld)\n", avail_num);
 
     pthread_mutex_lock(&mtx);
 
@@ -75,8 +75,6 @@ void* logging_thread_fn(void *arg) {
 }
 
 static void __attribute__((destructor)) fini() {
-  printf("preloaded.so unloaded!\n");
-
   pthread_mutex_lock(&mtx);
   library_unloaded = true;
   pthread_mutex_unlock(&mtx);
@@ -85,8 +83,6 @@ static void __attribute__((destructor)) fini() {
 }
 
 static void __attribute__((constructor)) init() {
-  printf("preloaded.so loaded!\n");
-
   pthread_mutex_lock(&mtx);
 
   // first touch
@@ -111,7 +107,7 @@ void *malloc(size_t size) {
   static malloc_type original_malloc = reinterpret_cast<malloc_type>(dlsym(RTLD_NEXT, "malloc"));
   static __thread bool malloc_no_hook = false;
 
-  if (malloc_no_hook) {
+  if (malloc_no_hook || pthread_self() == logging_thread) {
     return original_malloc(size);
   }
 
@@ -120,10 +116,11 @@ void *malloc(size_t size) {
   void *caller = __builtin_return_address(0);
   void *ret = original_malloc(size);
   //std::cout << caller << ": malloc(" << size << ") -> " << ret << std::endl;
-  printf("%p: malloc(%lu) -> %p\n", caller, size, ret);
+  //printf("%p: malloc(%lu) -> %p\n", caller, size, ret);
 
   pthread_mutex_lock(&mtx);
   while (avail_num == BUFFER_SIZE - 1) {
+    fprintf(stderr, "Warning: Logging buffer is full. malloc() is temporarily blocked.\n");
     pthread_cond_wait(&not_full_cond, &mtx);
   }
 
@@ -133,8 +130,12 @@ void *malloc(size_t size) {
     avail_end = (avail_end + 1) % BUFFER_SIZE;
   }
 
+  bool was_empty = (avail_num == 1);
   pthread_mutex_unlock(&mtx);
-  pthread_cond_signal(&not_empty_cond);
+
+  if (was_empty) {
+    pthread_cond_signal(&not_empty_cond);
+  }
 
   malloc_no_hook = false;
   return ret;
@@ -144,7 +145,7 @@ void free(void* ptr) {
   static free_type original_free = reinterpret_cast<free_type>(dlsym(RTLD_NEXT, "free"));
   static __thread bool free_no_hook = false;
 
-  if (free_no_hook) {
+  if (free_no_hook || pthread_self() == logging_thread) {
     return original_free(ptr);
   }
 
@@ -152,10 +153,12 @@ void free(void* ptr) {
 
   void *caller = __builtin_return_address(0);
   original_free(ptr);
-  printf("%p: free(%p)\n", caller, ptr);
+  //printf("%p: free(%p)\n", caller, ptr);
 
   pthread_mutex_lock(&mtx);
+
   while (avail_num == BUFFER_SIZE - 1) {
+    fprintf(stderr, "Warning: Logging buffer is full. free() is temporarily blocked.\n");
     pthread_cond_wait(&not_full_cond, &mtx);
   }
 
@@ -165,8 +168,12 @@ void free(void* ptr) {
     avail_end = (avail_end + 1) % BUFFER_SIZE;
   }
 
+  bool was_empty = (avail_num == 1);
   pthread_mutex_unlock(&mtx);
-  pthread_cond_signal(&not_empty_cond);
+
+  if (was_empty) {
+    pthread_cond_signal(&not_empty_cond);
+  }
 
   free_no_hook = false;
 }
