@@ -46,6 +46,13 @@ int main(int argc, char **argv) {
   const char *ptr = mapped_addr;
   const char *end_ptr = ptr + file_size;
 
+  unsigned long long mem_sum = 0;
+  unsigned long long mem_sum_mx = 0;
+  int skip_num = 0;
+  int line_num = 0;
+  std::unordered_map<void*, int> addr2size;
+  addr2size.reserve(1000000);
+
   size_t read_size = 0;
   while (read_size < file_size) {
     const char *new_line = static_cast<const char*>(memchr(ptr, '\n', end_ptr - ptr));
@@ -57,37 +64,9 @@ int main(int argc, char **argv) {
     int size;
     void *addr;
     iss >> addr >> size;
-    std::cout << addr << " " << size << std::endl;
-  }
-}
-
-/*
-int main(int argc, char **argv) {
-  std::ifstream ifs(argv[1]);
-
-  std::string line;
-  if (!ifs.is_open()) {
-    std::cerr << "file open error" << std::endl;
-    return 0;
-  } else {
-    std::cout << "file open success" << std::endl;
-  }
-
-  unsigned long long mem_sum = 0;
-  unsigned long long mem_sum_mx = 0;
-  int skip_num = 0;
-  int line_num = 0;
-
-  std::unordered_map<void*, int> addr2size;
-  addr2size.reserve(1000000);
-
-  while (ifs) {
-    int size;
-    void* addr;
-    std::cin >> addr >> size;
 
     if (size == -1) {
-      if (addr2size.find(addr) ==  addr2size.end()) {
+      if (addr2size.find(addr) == addr2size.end()) {
         skip_num++;
         continue;
       }
@@ -101,13 +80,14 @@ int main(int argc, char **argv) {
 
     mem_sum_mx = std::max(mem_sum_mx, mem_sum);
 
-    if (line_num % 100 == 0) {
-      std::cout << line << ": " << mem_sum_mx << std::endl;
+    if (line_num % 100000 == 0) {
+      std::cout << line_num << ": " << mem_sum_mx << std::endl;
     }
 
     line_num++;
   }
 
   std::cout << "mem_sum_mx = " << mem_sum_mx << std::endl;
+  std::cout << "skip_num = " << skip_num << std::endl;
 }
-*/
+
