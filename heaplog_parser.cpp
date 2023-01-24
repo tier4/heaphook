@@ -1,0 +1,113 @@
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <unordered_map>
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <string.h>
+
+const char* map_file(const char *name, size_t &len_out) {
+  int fd = open(name, O_RDONLY);
+  if (fd == -1) {
+    perror("open error");
+    exit(EXIT_FAILURE);
+  }
+
+  struct stat st;
+  if (fstat(fd, &st) == -1) {
+    perror("fstat error");
+    exit(EXIT_FAILURE);
+  }
+
+  len_out = st.st_size;
+
+  const char *addr = static_cast<char*>(mmap(NULL, len_out, PROT_READ, MAP_PRIVATE, fd, 0));
+  if (addr == MAP_FAILED) {
+    perror("mmap error");
+    exit(EXIT_FAILURE);
+  }
+
+  return addr;
+}
+
+int main(int argc, char **argv) {
+  if (argc != 2) {
+    std::cerr << "argc must be 2" << std::endl;
+    return 0;
+  }
+
+  size_t file_size;
+  const char *mapped_addr = map_file(argv[1], file_size);
+  const char *ptr = mapped_addr;
+  const char *end_ptr = ptr + file_size;
+
+  size_t read_size = 0;
+  while (read_size < file_size) {
+    const char *new_line = static_cast<const char*>(memchr(ptr, '\n', end_ptr - ptr));
+    const std::string line(ptr, new_line - ptr);
+    std::istringstream iss(line);
+    read_size += new_line - ptr + 1;
+    ptr = new_line + 1;
+
+    int size;
+    void *addr;
+    iss >> addr >> size;
+    std::cout << addr << " " << size << std::endl;
+  }
+}
+
+/*
+int main(int argc, char **argv) {
+  std::ifstream ifs(argv[1]);
+
+  std::string line;
+  if (!ifs.is_open()) {
+    std::cerr << "file open error" << std::endl;
+    return 0;
+  } else {
+    std::cout << "file open success" << std::endl;
+  }
+
+  unsigned long long mem_sum = 0;
+  unsigned long long mem_sum_mx = 0;
+  int skip_num = 0;
+  int line_num = 0;
+
+  std::unordered_map<void*, int> addr2size;
+  addr2size.reserve(1000000);
+
+  while (ifs) {
+    int size;
+    void* addr;
+    std::cin >> addr >> size;
+
+    if (size == -1) {
+      if (addr2size.find(addr) ==  addr2size.end()) {
+        skip_num++;
+        continue;
+      }
+
+      mem_sum -= addr2size[addr];
+      addr2size.erase(addr);
+    } else {
+      addr2size[addr] = size;
+      mem_sum += size;
+    }
+
+    mem_sum_mx = std::max(mem_sum_mx, mem_sum);
+
+    if (line_num % 100 == 0) {
+      std::cout << line << ": " << mem_sum_mx << std::endl;
+    }
+
+    line_num++;
+  }
+
+  std::cout << "mem_sum_mx = " << mem_sum_mx << std::endl;
+}
+*/
