@@ -61,24 +61,30 @@ int main(int argc, char **argv) {
     read_size += new_line - ptr + 1;
     ptr = new_line + 1;
 
-    int size;
+    std::string hook_type;
+    size_t size;
     void *addr;
-    iss >> addr >> size;
+    iss >> hook_type >> addr >> size;
 
-    if (size == -1) {
+    if (hook_type == "free") {
       if (addr2size.find(addr) == addr2size.end()) {
         skip_num++;
         continue;
       }
 
-      mem_sum -= addr2size[addr];
+      /* if (addr2size[addr] < 10000) */ mem_sum -= addr2size[addr];
       addr2size.erase(addr);
-    } else {
+    } else if (hook_type == "malloc") {
       addr2size[addr] = size;
-      mem_sum += size;
+      /* if (size < 10000) */ mem_sum += size;
     }
 
     mem_sum_mx = std::max(mem_sum_mx, mem_sum);
+
+    if (mem_sum_mx > 10e18) {
+      std::cout << line << std::endl;
+      break;
+    }
 
     if (line_num % 100000 == 0) {
       std::cout << line_num << ": " << mem_sum_mx << std::endl;

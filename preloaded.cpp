@@ -13,13 +13,31 @@
 using malloc_type = void*(*)(size_t);
 using free_type = void(*)(void*);
 
-static const size_t BUFFER_SIZE = 1000000;
+enum class HookType {
+  Malloc,
+  Free,
+};
+
+std::string type_names[2] = {"malloc", "free"};
+
+struct LogEntry {
+  HookType type;
+  void* addr;
+  size_t size;
+};
+
+static const size_t BUFFER_SIZE = 10000000;
 static const size_t LOG_BATCH_SIZE = 100;
 
-static int sizes_log[BUFFER_SIZE];
+static LogEntry log[BUFFER_SIZE];
+static LogEntry log_buffer[LOG_BATCH_SIZE];
+
+/*
+static size_t sizes_log[BUFFER_SIZE];
 static void* addrs_log[BUFFER_SIZE];
-static int sizes_log_buffer[LOG_BATCH_SIZE];
+static size_t sizes_log_buffer[LOG_BATCH_SIZE];
 static void* addrs_log_buffer[LOG_BATCH_SIZE];
+*/
 
 // [avail_start, avail_end)
 static size_t avail_start = 0; // guarded by mtx
@@ -44,8 +62,9 @@ void* logging_thread_fn(void *arg) {
 
     size_t sz = std::min(LOG_BATCH_SIZE, avail_num);
     for (size_t i = 0; i < sz; i++) {
-      sizes_log_buffer[i] = sizes_log[avail_start + i];
-      addrs_log_buffer[i] = addrs_log[avail_start + i];
+      //sizes_log_buffer[i] = sizes_log[avail_start + i];
+      //addrs_log_buffer[i] = addrs_log[avail_start + i];
+      log_buffer[i] = log[avail_start + i];
     }
 
     bool was_full = (avail_num == BUFFER_SIZE - 1);
@@ -59,7 +78,8 @@ void* logging_thread_fn(void *arg) {
 
     std::ofstream ofs("heaplog." + std::to_string(getpid()) + ".log", std::ios::app);
     for (size_t i = 0; i < sz; i++) {
-      ofs << addrs_log_buffer[i] << " " << sizes_log_buffer[i] << std::endl;
+      //ofs << addrs_log_buffer[i] << " " << sizes_log_buffer[i] << std::endl;
+      ofs << type_names[static_cast<int>(log_buffer[i].type)] << " " << log_buffer[i].addr << " " << log_buffer[i].size << std::endl;
     }
     ofs.close();
 
@@ -87,13 +107,15 @@ static void __attribute__((constructor)) init() {
 
   // first touch
   for (size_t i = avail_end; i < BUFFER_SIZE; i++) {
-    sizes_log[i] = 0;
-    addrs_log[i] = 0;
+    //sizes_log[i] = 0;
+    //addrs_log[i] = 0;
+    log[i] = {};
   }
 
   for (size_t i = 0; i < LOG_BATCH_SIZE; i++) {
-    sizes_log_buffer[i] = 0;
-    addrs_log_buffer[i] = 0;
+    //sizes_log_buffer[i] = 0;
+    //addrs_log_buffer[i] = 0;
+    log_buffer[i] = {};
   }
 
   pthread_mutex_unlock(&mtx);
@@ -125,8 +147,9 @@ void *malloc(size_t size) {
   }
 
   if (!library_unloaded) {
-    sizes_log[avail_end] = size;
-    addrs_log[avail_end] = ret;
+    //sizes_log[avail_end] = size;
+    //addrs_log[avail_end] = ret;
+    log[avail_end] = {HookType::Malloc, ret, size};
     avail_end = (avail_end + 1) % BUFFER_SIZE;
   }
 
@@ -163,8 +186,9 @@ void free(void* ptr) {
   }
 
   if (!library_unloaded) {
-    sizes_log[avail_end] = -1;
-    addrs_log[avail_end] = ptr;
+    //sizes_log[avail_end] = -1;
+    //addrs_log[avail_end] = ptr;
+    log[avail_end] = {HookType::Free, ptr, 0};
     avail_end = (avail_end + 1) % BUFFER_SIZE;
   }
 
