@@ -58,7 +58,7 @@ def read_heap_history(filename):
             progress_bar.finish()
             print("key_not_found =", key_not_found)
 
-def visualize():
+def visualize(output_fname):
     fig = plt.figure(figsize=(16, 16))
     ax = fig.add_subplot(1, 1, 1)
 
@@ -66,11 +66,15 @@ def visualize():
     ax.set_xlabel("Hook index")
     ax.set_ylabel("Accumulated heap allocation size (bytes)")
 
-    plt.show()
+    plt.savefig(output_fname)
+    print("Figure is saved as {}".format(output_fname))
 
 if __name__ == "__main__":
     read_heap_history(sys.argv[1])
+
     heap_history.resize(heap_history_num)
 
-    visualize()
+    # Assumes "heaplog.{pid}.log"
+    input_fname = sys.argv[1].split('.')
+    visualize("{}.{}.pdf".format(input_fname[0], input_fname[1]))
 

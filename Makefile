@@ -15,5 +15,5 @@ run:
 
 .PHONY: clean
 clean:
-	rm app preloaded.so heaplog_parser core.* *.log
+	rm app preloaded.so heaplog_parser core.* *.log *.pdf
 
