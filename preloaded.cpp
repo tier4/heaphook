@@ -12,13 +12,15 @@
 
 using malloc_type = void*(*)(size_t);
 using free_type = void(*)(void*);
+using calloc_type = void*(*)(size_t, size_t);
 
 enum class HookType {
   Malloc,
   Free,
+  Calloc,
 };
 
-std::string type_names[2] = {"malloc", "free"};
+std::string type_names[3] = {"malloc", "free", "calloc"};
 
 struct LogEntry {
   HookType type;
@@ -44,14 +46,14 @@ static size_t avail_start = 0; // guarded by mtx
 static size_t avail_end = 0; // guarded by mtx
 #define avail_num ((avail_end - avail_start + BUFFER_SIZE) % BUFFER_SIZE)
 
-bool library_unloaded = false; // guarded by mtx
+static bool library_unloaded = false; // guarded by mtx
 
 static pthread_t logging_thread;
 static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t not_full_cond = PTHREAD_COND_INITIALIZER; // avail_num < (BUFFER_SIZE - 1)
 static pthread_cond_t not_empty_cond = PTHREAD_COND_INITIALIZER; // avail_num > 0
 
-void* logging_thread_fn(void *arg) {
+static void* logging_thread_fn(void *arg) {
   (void) arg;
 
   while (true) {
@@ -62,8 +64,6 @@ void* logging_thread_fn(void *arg) {
 
     size_t sz = std::min(LOG_BATCH_SIZE, avail_num);
     for (size_t i = 0; i < sz; i++) {
-      //sizes_log_buffer[i] = sizes_log[avail_start + i];
-      //addrs_log_buffer[i] = addrs_log[avail_start + i];
       log_buffer[i] = log[avail_start + i];
     }
 
@@ -78,7 +78,6 @@ void* logging_thread_fn(void *arg) {
 
     std::ofstream ofs("heaplog." + std::to_string(getpid()) + ".log", std::ios::app);
     for (size_t i = 0; i < sz; i++) {
-      //ofs << addrs_log_buffer[i] << " " << sizes_log_buffer[i] << std::endl;
       ofs << type_names[static_cast<int>(log_buffer[i].type)] << " " << log_buffer[i].addr << " " << log_buffer[i].size << std::endl;
     }
     ofs.close();
@@ -91,6 +90,27 @@ void* logging_thread_fn(void *arg) {
     }
 
     pthread_mutex_unlock(&mtx);
+  }
+}
+
+static void locked_logging(HookType hook_type, void *addr, size_t size) {
+  pthread_mutex_lock(&mtx);
+
+  while (avail_num == BUFFER_SIZE - 1) {
+    fprintf(stderr, "Warning: Logging buffer is full. free() is temporarily blocked.\n");
+    pthread_cond_wait(&not_full_cond, &mtx);
+  }
+
+  if (!library_unloaded) {
+    log[avail_end] = {hook_type, addr, size};
+    avail_end = (avail_end + 1) % BUFFER_SIZE;
+  }
+
+  bool was_empty = (avail_num == 1);
+  pthread_mutex_unlock(&mtx);
+
+  if (was_empty) {
+    pthread_cond_signal(&not_empty_cond);
   }
 }
 
@@ -107,14 +127,10 @@ static void __attribute__((constructor)) init() {
 
   // first touch
   for (size_t i = avail_end; i < BUFFER_SIZE; i++) {
-    //sizes_log[i] = 0;
-    //addrs_log[i] = 0;
     log[i] = {};
   }
 
   for (size_t i = 0; i < LOG_BATCH_SIZE; i++) {
-    //sizes_log_buffer[i] = 0;
-    //addrs_log_buffer[i] = 0;
     log_buffer[i] = {};
   }
 
@@ -140,25 +156,7 @@ void *malloc(size_t size) {
   //std::cout << caller << ": malloc(" << size << ") -> " << ret << std::endl;
   //printf("%p: malloc(%lu) -> %p\n", caller, size, ret);
 
-  pthread_mutex_lock(&mtx);
-  while (avail_num == BUFFER_SIZE - 1) {
-    fprintf(stderr, "Warning: Logging buffer is full. malloc() is temporarily blocked.\n");
-    pthread_cond_wait(&not_full_cond, &mtx);
-  }
-
-  if (!library_unloaded) {
-    //sizes_log[avail_end] = size;
-    //addrs_log[avail_end] = ret;
-    log[avail_end] = {HookType::Malloc, ret, size};
-    avail_end = (avail_end + 1) % BUFFER_SIZE;
-  }
-
-  bool was_empty = (avail_num == 1);
-  pthread_mutex_unlock(&mtx);
-
-  if (was_empty) {
-    pthread_cond_signal(&not_empty_cond);
-  }
+  locked_logging(HookType::Malloc, ret, size);
 
   malloc_no_hook = false;
   return ret;
@@ -178,29 +176,27 @@ void free(void* ptr) {
   original_free(ptr);
   //printf("%p: free(%p)\n", caller, ptr);
 
-  pthread_mutex_lock(&mtx);
-
-  while (avail_num == BUFFER_SIZE - 1) {
-    fprintf(stderr, "Warning: Logging buffer is full. free() is temporarily blocked.\n");
-    pthread_cond_wait(&not_full_cond, &mtx);
-  }
-
-  if (!library_unloaded) {
-    //sizes_log[avail_end] = -1;
-    //addrs_log[avail_end] = ptr;
-    log[avail_end] = {HookType::Free, ptr, 0};
-    avail_end = (avail_end + 1) % BUFFER_SIZE;
-  }
-
-  bool was_empty = (avail_num == 1);
-  pthread_mutex_unlock(&mtx);
-
-  if (was_empty) {
-    pthread_cond_signal(&not_empty_cond);
-  }
+  locked_logging(HookType::Free, ptr, 0);
 
   free_no_hook = false;
 }
 
-} // extern "C"
+void* calloc(size_t num, size_t size) {
+  static calloc_type original_calloc = reinterpret_cast<calloc_type>(dlsym(RTLD_NEXT, "calloc"));
+  static __thread bool calloc_no_hook = false;
 
+  if (calloc_no_hook || pthread_self() == logging_thread) {
+    return original_calloc(num, size);
+  }
+
+  calloc_no_hook = true;
+
+  void *ret = original_calloc(num, size);
+
+  locked_logging(HookType::Calloc, ret, num * size);
+
+  calloc_no_hook = false;
+
+  return ret;
+}
+} // extern "C"

@@ -24,8 +24,13 @@ def read_heap_history(filename):
 
             heap_history = np.empty(line_num + 1, dtype=np.int64)
             heap_history[0] = 0
+
             key_not_found = 0
             line_idx = 0
+            malloc_num = 0
+            free_num = 0
+            calloc_num = 0
+
             va.seek(0)
 
             progress_bar = ShadyBar("Progress", max=line_num, suffix="%(percent).1f%% - Elapsed: %(elapsed)ds")
@@ -42,10 +47,18 @@ def read_heap_history(filename):
                 if (addr == 0):
                     continue
 
-                if hook_type == b'malloc':
+                if hook_type == b'malloc' or hook_type == b'calloc':
                     addr2size[addr] = size
                     heap_history[heap_history_num] = heap_history[heap_history_num - 1] + size
+
+                    if hook_type == b'malloc':
+                        malloc_num += 1
+                    else:
+                        calloc_num += 1
+
                 elif hook_type == b'free':
+                    free_num += 1
+
                     if not addr in addr2size:
                         key_not_found += 1
                         continue
@@ -57,6 +70,9 @@ def read_heap_history(filename):
 
             progress_bar.finish()
             print("key_not_found =", key_not_found)
+            print("malloc is called {} times".format(malloc_num))
+            print("calloc is called {} times".format(calloc_num))
+            print("free is called {} times".format(free_num))
 
 def visualize(output_fname):
     fig = plt.figure(figsize=(16, 16))
@@ -75,6 +91,6 @@ if __name__ == "__main__":
     heap_history.resize(heap_history_num)
 
     # Assumes "heaplog.{pid}.log"
-    input_fname = sys.argv[1].split('.')
+    input_fname = os.path.basename(sys.argv[1]).split('.')
     visualize("{}.{}.pdf".format(input_fname[0], input_fname[1]))
 
