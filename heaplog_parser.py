@@ -28,10 +28,16 @@ def read_heap_history(filename):
 
             key_not_found = 0
             line_idx = 0
+
             malloc_num = 0
             free_num = 0
             calloc_num = 0
             realloc_num = 0
+            posix_memalign_num = 0
+            memalign_num = 0
+            aligned_alloc_num = 0
+            valloc_num = 0
+            pvalloc_num = 0
 
             va.seek(0)
 
@@ -50,14 +56,26 @@ def read_heap_history(filename):
                 if (addr == 0):
                     continue
 
-                if hook_type == b'malloc' or hook_type == b'calloc':
+                if hook_type in [b'malloc', b'calloc', b'posix_memalign', b'memalign', b'aligned_alloc', b'valloc', b'pvalloc']:
                     addr2size[addr] = size
                     heap_history[heap_history_num] = heap_history[heap_history_num - 1] + size
 
                     if hook_type == b'malloc':
                         malloc_num += 1
-                    else:
+                    elif hook_type == b'calloc':
                         calloc_num += 1
+                    elif hook_type == b'posix_memalign':
+                        posix_memalign_num += 1
+                    elif hook_type == b'memalign':
+                        memalign_num += 1
+                    elif hook_type == b'aligned_alloc':
+                        aligned_alloc_num += 1
+                    elif hook_type == b'valloc':
+                        valloc_num += 1
+                    elif hook_type == b'pvalloc':
+                        pvalloc_num += 1
+                    else:
+                        raise Exception("not reached")
 
                 elif hook_type == b'free':
                     free_num += 1
@@ -88,6 +106,11 @@ def read_heap_history(filename):
             print("calloc is called {} times".format(calloc_num))
             print("realloc is called {} times".format(realloc_num))
             print("free is called {} times".format(free_num))
+            print("posix_memalign is called {} times".format(posix_memalign_num))
+            print("memalign is called {} times".format(memalign_num))
+            print("aligned_alloc is called {} times".format(aligned_alloc_num))
+            print("valloc is called {} times".format(valloc_num))
+            print("pvalloc is called {} times".format(pvalloc_num))
 
 def visualize(output_fname):
     fig = plt.figure(figsize=(16, 16))

@@ -1,6 +1,7 @@
 #include <vector>
 #include <iostream>
 #include <stdlib.h>
+#include <malloc.h>
 
 int main() {
   {
@@ -20,5 +21,36 @@ int main() {
 
   int *values = new int[10];
   delete[] values;
+
+  {
+    void* ptr;
+    int ret = posix_memalign(&ptr, 4096, 1111);
+    if (ret != 0) {
+      perror("posix_memalign error");
+    }
+
+    std::cout << "posix_memalign allocated at " << ptr << std::endl;
+  }
+
+  {
+    void *addr = memalign(4096, 2222);
+    std::cout << "memalign allocated at " << addr << std::endl;
+  }
+
+  {
+    // Should be error by specification, but valid in some implementation.
+    void *addr = aligned_alloc(4096, 3333);
+    std::cout << "aligned_alloc allocated at " << addr << std::endl;
+  }
+
+  {
+    void *addr = valloc(4444);
+    std::cout << "valloc allocated at " << addr << std::endl;
+  }
+
+  {
+    void *addr = pvalloc(5555);
+    std::cout << "pvalloc allocated at " << addr << std::endl;
+  }
 }
 

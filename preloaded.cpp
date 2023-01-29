@@ -15,14 +15,27 @@ using free_type = void(*)(void*);
 using calloc_type = void*(*)(size_t, size_t);
 using realloc_type = void*(*)(void*, size_t);
 
+// Aligned allocation
+using posix_memalign_type = int(*)(void **, size_t, size_t);
+using memalign_type = void*(*)(size_t, size_t);
+using aligned_alloc_type = void*(*)(size_t, size_t);
+using valloc_type = void*(*)(size_t);
+using pvalloc_type = void*(*)(size_t);
+
 enum class HookType {
   Malloc,
   Free,
   Calloc,
   Realloc,
+  PosixMemalign,
+  Memalign,
+  AlignedAlloc,
+  Valloc,
+  Pvalloc,
 };
 
-std::string type_names[4] = {"malloc", "free", "calloc", "realloc"};
+std::string type_names[9] = {"malloc", "free", "calloc", "realloc",
+  "posix_memalign", "memalign", "aligned_alloc", "valloc", "pvalloc"};
 
 struct LogEntry {
   HookType type;
@@ -211,6 +224,93 @@ void* realloc(void *ptr, size_t new_size) {
   locked_logging(HookType::Realloc, ptr, new_size, ret);
 
   realloc_no_hook = false;
+  return ret;
+}
+
+int posix_memalign(void **memptr, size_t alignment, size_t size) {
+  static posix_memalign_type original_posix_memalign = reinterpret_cast<posix_memalign_type>(dlsym(RTLD_NEXT, "posix_memalign"));
+  static __thread bool posix_memalign_no_hook = false;
+
+  if (posix_memalign_no_hook || pthread_self() == logging_thread) {
+    return original_posix_memalign(memptr, alignment, size);
+  }
+
+  posix_memalign_no_hook = true;
+  int ret = original_posix_memalign(memptr, alignment, size);
+
+  locked_logging(HookType::PosixMemalign, *memptr, size, NULL);
+
+  posix_memalign_no_hook = false;
+  return ret;
+}
+
+void* memalign(size_t alignment, size_t size) {
+  static memalign_type original_memalign = reinterpret_cast<memalign_type>(dlsym(RTLD_NEXT, "memalign"));
+  static __thread bool memalign_no_hook = false;
+
+  if (memalign_no_hook || pthread_self() == logging_thread) {
+    return original_memalign(alignment, size);
+  }
+
+  memalign_no_hook = true;
+  void *ret = original_memalign(alignment, size);
+
+  locked_logging(HookType::Memalign, ret, size, NULL);
+
+  memalign_no_hook = false;
+  return ret;
+}
+
+void* aligned_alloc(size_t alignment, size_t size) {
+  static aligned_alloc_type original_aligned_alloc = reinterpret_cast<aligned_alloc_type>(dlsym(RTLD_NEXT, "aligned_alloc"));
+  static __thread bool aligned_alloc_no_hook = false;
+
+  if (aligned_alloc_no_hook || pthread_self() == logging_thread) {
+    return original_aligned_alloc(alignment, size);
+  }
+
+  aligned_alloc_no_hook = true;
+  void *ret = original_aligned_alloc(alignment, size);
+
+  locked_logging(HookType::AlignedAlloc, ret, size, NULL);
+
+  aligned_alloc_no_hook = false;
+  return ret;
+}
+
+void* valloc(size_t size) {
+  static valloc_type original_valloc = reinterpret_cast<valloc_type>(dlsym(RTLD_NEXT, "valloc"));
+  static __thread bool valloc_no_hook = false;
+
+  if (valloc_no_hook || pthread_self() == logging_thread) {
+    return original_valloc(size);
+  }
+
+  valloc_no_hook = true;
+  void *ret = original_valloc(size);
+
+  locked_logging(HookType::Valloc, ret, size, NULL);
+  valloc_no_hook = false;
+
+  return ret;
+}
+
+void* pvalloc(size_t size) {
+  static pvalloc_type original_palloc = reinterpret_cast<pvalloc_type>(dlsym(RTLD_NEXT, "pvalloc"));
+  static __thread bool pvalloc_no_hook = false;
+
+  if (pvalloc_no_hook || pthread_self() == logging_thread) {
+    return original_palloc(size);
+  }
+
+  pvalloc_no_hook = true;
+  void *ret = pvalloc(size);
+
+  // pvalloc() rounds the size of the allocation up to the next multiple of the system page size.
+  size_t page_size = sysconf(_SC_PAGESIZE);
+  size_t rounded_up = size + (page_size - size % page_size) % page_size;
+  locked_logging(HookType::Pvalloc, ret, rounded_up, NULL);
+
   return ret;
 }
 
