@@ -38,6 +38,7 @@ def read_heap_history(filename):
             aligned_alloc_num = 0
             valloc_num = 0
             pvalloc_num = 0
+            malloc_usable_size_num = 0
 
             va.seek(0)
 
@@ -97,6 +98,8 @@ def read_heap_history(filename):
                     del addr2size[addr]
                     heap_history[heap_history_num] += size
                     addr2size[new_addr] = size
+                elif hook_type == b'malloc_usable_size':
+                    malloc_usable_size_num += 1
 
                 heap_history_num += 1
 
@@ -111,6 +114,7 @@ def read_heap_history(filename):
             print("aligned_alloc is called {} times".format(aligned_alloc_num))
             print("valloc is called {} times".format(valloc_num))
             print("pvalloc is called {} times".format(pvalloc_num))
+            print("malloc_usable_size is called {} times".format(malloc_usable_size_num))
 
 def visualize(output_fname):
     fig = plt.figure(figsize=(16, 16))

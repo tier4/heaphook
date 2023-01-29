@@ -51,6 +51,9 @@ int main() {
   {
     void *addr = pvalloc(5555);
     std::cout << "pvalloc allocated at " << addr << std::endl;
+
+    size_t size = malloc_usable_size(addr);
+    std::cout << "malloc_usable_size() returns " << size << std::endl;
   }
 }
 

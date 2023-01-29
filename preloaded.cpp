@@ -22,6 +22,12 @@ using aligned_alloc_type = void*(*)(size_t, size_t);
 using valloc_type = void*(*)(size_t);
 using pvalloc_type = void*(*)(size_t);
 
+using malloc_usable_size_type = size_t(*)(void*);
+
+/*
+ * We don't hook reallocarray() function because realloc() is called from reallocarray().
+*/
+
 enum class HookType {
   Malloc,
   Free,
@@ -32,10 +38,12 @@ enum class HookType {
   AlignedAlloc,
   Valloc,
   Pvalloc,
+  MallocUsableSize,
 };
 
-std::string type_names[9] = {"malloc", "free", "calloc", "realloc",
-  "posix_memalign", "memalign", "aligned_alloc", "valloc", "pvalloc"};
+std::string type_names[10] = {"malloc", "free", "calloc", "realloc",
+  "posix_memalign", "memalign", "aligned_alloc", "valloc", "pvalloc",
+  "malloc_usable_size"};
 
 struct LogEntry {
   HookType type;
@@ -311,6 +319,15 @@ void* pvalloc(size_t size) {
   size_t rounded_up = size + (page_size - size % page_size) % page_size;
   locked_logging(HookType::Pvalloc, ret, rounded_up, NULL);
 
+  return ret;
+}
+
+size_t malloc_usable_size(void *ptr) {
+  static malloc_usable_size_type original_malloc_usable_size = \
+    reinterpret_cast<malloc_usable_size_type>(dlsym(RTLD_NEXT, "malloc_usable_size"));
+
+  size_t ret = original_malloc_usable_size(ptr);
+  locked_logging(HookType::MallocUsableSize, ptr, ret, NULL);
   return ret;
 }
 
