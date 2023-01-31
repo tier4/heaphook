@@ -169,7 +169,7 @@ void *malloc(size_t size) {
 
   malloc_no_hook = true;
 
-  void *caller = __builtin_return_address(0);
+  //void *caller = __builtin_return_address(0);
   void *ret = original_malloc(size);
   //std::cout << caller << ": malloc(" << size << ") -> " << ret << std::endl;
   //printf("%p: malloc(%lu) -> %p\n", caller, size, ret);
@@ -190,7 +190,7 @@ void free(void* ptr) {
 
   free_no_hook = true;
 
-  void *caller = __builtin_return_address(0);
+  //void *caller = __builtin_return_address(0);
   original_free(ptr);
   //printf("%p: free(%p)\n", caller, ptr);
 
