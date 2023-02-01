@@ -6,9 +6,14 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <sys/mman.h>
+#include <string.h>
+
 #include <iostream>
 #include <fstream>
 #include <string>
+
+#include "tlsf/tlsf.h"
 
 using malloc_type = void*(*)(size_t);
 using free_type = void(*)(void*);
@@ -45,6 +50,9 @@ std::string type_names[10] = {"malloc", "free", "calloc", "realloc",
   "posix_memalign", "memalign", "aligned_alloc", "valloc", "pvalloc",
   "malloc_usable_size"};
 
+static char *mempool_ptr;
+static const size_t MEMPOOL_SIZE = 1 * 1000 * 1000 * 1000;
+
 struct LogEntry {
   HookType type;
   void* addr;
@@ -64,6 +72,11 @@ static size_t avail_end = 0; // guarded by mtx
 #define avail_num ((avail_end - avail_start + BUFFER_SIZE) % BUFFER_SIZE)
 
 static bool library_unloaded = false; // guarded by mtx
+
+static pthread_mutex_t init_mtx = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t init_cond = PTHREAD_COND_INITIALIZER; // mempool_initialized == true
+static bool mempool_initialized = false;
+static bool mempool_init_started = false; // guarded by init_mtx
 
 static pthread_t logging_thread;
 static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
@@ -157,6 +170,35 @@ static void __attribute__((constructor)) init() {
   pthread_create(&logging_thread, NULL, logging_thread_fn, 0);
 }
 
+static void initialize_mempool() {
+  mempool_ptr = (char *) mmap(NULL, MEMPOOL_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  memset(mempool_ptr, 0, MEMPOOL_SIZE);
+  init_memory_pool(MEMPOOL_SIZE, mempool_ptr); // tlsf library function
+}
+
+// Do not use printf
+void check_mempool_initialized() {
+  if (mempool_initialized) return;
+
+  pthread_mutex_lock(&init_mtx);
+
+  if (!mempool_init_started) {
+    mempool_init_started = true;
+    pthread_mutex_unlock(&init_mtx);
+
+    initialize_mempool();
+
+    mempool_initialized = true;
+    pthread_cond_signal(&init_cond);
+  } else {
+    while (!mempool_initialized) {
+      pthread_cond_wait(&init_cond, &init_mtx);
+    }
+
+    pthread_mutex_unlock(&init_mtx);
+  }
+}
+
 extern "C" {
 
 void *malloc(size_t size) {
@@ -164,13 +206,19 @@ void *malloc(size_t size) {
   static __thread bool malloc_no_hook = false;
 
   if (malloc_no_hook || pthread_self() == logging_thread) {
-    return original_malloc(size);
+    if (mempool_initialized) return tlsf_malloc(size);
+    else return original_malloc(size);
   }
 
   malloc_no_hook = true;
 
+  check_mempool_initialized();
+
   //void *caller = __builtin_return_address(0);
-  void *ret = original_malloc(size);
+
+  // void *ret = original_malloc(size);
+  void *ret = tlsf_malloc(size);
+
   //std::cout << caller << ": malloc(" << size << ") -> " << ret << std::endl;
   //printf("%p: malloc(%lu) -> %p\n", caller, size, ret);
 
@@ -185,13 +233,17 @@ void free(void* ptr) {
   static __thread bool free_no_hook = false;
 
   if (free_no_hook || pthread_self() == logging_thread) {
-    return original_free(ptr);
+    if (mempool_initialized) tlsf_free(ptr);
+    else original_free(ptr);
+    return;
   }
 
   free_no_hook = true;
 
+  check_mempool_initialized();
+
   //void *caller = __builtin_return_address(0);
-  original_free(ptr);
+  tlsf_free(ptr);
   //printf("%p: free(%p)\n", caller, ptr);
 
   locked_logging(HookType::Free, ptr, 0, NULL);
@@ -204,12 +256,15 @@ void* calloc(size_t num, size_t size) {
   static __thread bool calloc_no_hook = false;
 
   if (calloc_no_hook || pthread_self() == logging_thread) {
-    return original_calloc(num, size);
+    if (mempool_initialized) return tlsf_calloc(num, size);
+    else return original_calloc(num, size);
   }
 
   calloc_no_hook = true;
 
-  void *ret = original_calloc(num, size);
+  check_mempool_initialized();
+
+  void *ret = tlsf_calloc(num, size);
 
   locked_logging(HookType::Calloc, ret, num * size, NULL);
 
@@ -223,11 +278,15 @@ void* realloc(void *ptr, size_t new_size) {
   static __thread bool realloc_no_hook = false;
 
   if (realloc_no_hook || pthread_self() == logging_thread) {
-    return original_realloc(ptr, new_size);
+    if (mempool_initialized) return tlsf_realloc(ptr, new_size);
+    else return original_realloc(ptr, new_size);
   }
 
   realloc_no_hook = true;
-  void *ret = original_realloc(ptr, new_size);
+
+  check_mempool_initialized();
+
+  void *ret = tlsf_realloc(ptr, new_size);
 
   locked_logging(HookType::Realloc, ptr, new_size, ret);
 
@@ -238,6 +297,8 @@ void* realloc(void *ptr, size_t new_size) {
 int posix_memalign(void **memptr, size_t alignment, size_t size) {
   static posix_memalign_type original_posix_memalign = reinterpret_cast<posix_memalign_type>(dlsym(RTLD_NEXT, "posix_memalign"));
   static __thread bool posix_memalign_no_hook = false;
+
+  check_mempool_initialized();
 
   if (posix_memalign_no_hook || pthread_self() == logging_thread) {
     return original_posix_memalign(memptr, alignment, size);
@@ -273,6 +334,8 @@ void* aligned_alloc(size_t alignment, size_t size) {
   static aligned_alloc_type original_aligned_alloc = reinterpret_cast<aligned_alloc_type>(dlsym(RTLD_NEXT, "aligned_alloc"));
   static __thread bool aligned_alloc_no_hook = false;
 
+  check_mempool_initialized();
+
   if (aligned_alloc_no_hook || pthread_self() == logging_thread) {
     return original_aligned_alloc(alignment, size);
   }
@@ -290,6 +353,8 @@ void* valloc(size_t size) {
   static valloc_type original_valloc = reinterpret_cast<valloc_type>(dlsym(RTLD_NEXT, "valloc"));
   static __thread bool valloc_no_hook = false;
 
+  check_mempool_initialized();
+
   if (valloc_no_hook || pthread_self() == logging_thread) {
     return original_valloc(size);
   }
@@ -306,6 +371,8 @@ void* valloc(size_t size) {
 void* pvalloc(size_t size) {
   static pvalloc_type original_palloc = reinterpret_cast<pvalloc_type>(dlsym(RTLD_NEXT, "pvalloc"));
   static __thread bool pvalloc_no_hook = false;
+
+  check_mempool_initialized();
 
   if (pvalloc_no_hook || pthread_self() == logging_thread) {
     return original_palloc(size);
@@ -325,6 +392,8 @@ void* pvalloc(size_t size) {
 size_t malloc_usable_size(void *ptr) {
   static malloc_usable_size_type original_malloc_usable_size = \
     reinterpret_cast<malloc_usable_size_type>(dlsym(RTLD_NEXT, "malloc_usable_size"));
+
+  check_mempool_initialized();
 
   size_t ret = original_malloc_usable_size(ptr);
   locked_logging(HookType::MallocUsableSize, ptr, ret, NULL);

@@ -24,11 +24,14 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 endif()
 
+add_executable(app src/app.cpp)
+
 add_library(preloaded SHARED src/preloaded.cpp)
 
 add_library(preloaded_tlsf SHARED src/preloaded_tlsf.cpp)
 target_link_libraries(preloaded_tlsf PRIVATE tlsf::tlsf)
 
 install(TARGETS preloaded preloaded_tlsf DESTINATION shared)
+install(TARGETS app DESTINATION bin)
 
 ament_package()
