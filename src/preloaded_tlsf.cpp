@@ -12,6 +12,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <unordered_map>
 
 #include "tlsf/tlsf.h"
 
@@ -52,6 +53,7 @@ std::string type_names[10] = {"malloc", "free", "calloc", "realloc",
 
 static char *mempool_ptr;
 static const size_t MEMPOOL_SIZE = 1 * 1000 * 1000 * 1000;
+static std::unordered_map<void*, void*> aligned2orig;
 
 struct LogEntry {
   HookType type;
@@ -174,6 +176,8 @@ static void initialize_mempool() {
   mempool_ptr = (char *) mmap(NULL, MEMPOOL_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   memset(mempool_ptr, 0, MEMPOOL_SIZE);
   init_memory_pool(MEMPOOL_SIZE, mempool_ptr); // tlsf library function
+
+  // aligned2orig.reserve(10000000);
 }
 
 // Do not use printf
@@ -197,6 +201,16 @@ void check_mempool_initialized() {
 
     pthread_mutex_unlock(&init_mtx);
   }
+}
+
+static void* tlsf_aligned_malloc(size_t alignment, size_t size) {
+  void *addr = tlsf_malloc(alignment + size);
+  void* aligned = reinterpret_cast<void*>(reinterpret_cast<uint64_t>(addr) + alignment - reinterpret_cast<uint64_t>(addr) % alignment);
+  aligned2orig[aligned] = addr;
+
+  //printf("In tlsf_aligned_malloc: orig=%p -> aligned=%p\n", addr, aligned);
+
+  return aligned;
 }
 
 extern "C" {
@@ -243,6 +257,13 @@ void free(void* ptr) {
   check_mempool_initialized();
 
   //void *caller = __builtin_return_address(0);
+  auto it = aligned2orig.find(ptr);
+  if (it != aligned2orig.end()) {
+    //printf("In free: aligned=%p -> orig=%p\n", it->first, it->second);
+    ptr = it->second;
+    aligned2orig.erase(it);
+  }
+
   tlsf_free(ptr);
   //printf("%p: free(%p)\n", caller, ptr);
 
@@ -286,6 +307,13 @@ void* realloc(void *ptr, size_t new_size) {
 
   check_mempool_initialized();
 
+  auto it = aligned2orig.find(ptr);
+  if (it != aligned2orig.end()) {
+    //printf("In realloc: aligned=%p -> orig=%p\n", it->first, it->second);
+    ptr = it->second;
+    aligned2orig.erase(ptr);
+  }
+
   void *ret = tlsf_realloc(ptr, new_size);
 
   locked_logging(HookType::Realloc, ptr, new_size, ret);
@@ -298,19 +326,23 @@ int posix_memalign(void **memptr, size_t alignment, size_t size) {
   static posix_memalign_type original_posix_memalign = reinterpret_cast<posix_memalign_type>(dlsym(RTLD_NEXT, "posix_memalign"));
   static __thread bool posix_memalign_no_hook = false;
 
-  check_mempool_initialized();
-
   if (posix_memalign_no_hook || pthread_self() == logging_thread) {
-    return original_posix_memalign(memptr, alignment, size);
+    if (mempool_initialized) {
+      *memptr = tlsf_aligned_malloc(alignment, size);
+      return 0;
+    } else {
+      return original_posix_memalign(memptr, alignment, size);
+    }
   }
 
   posix_memalign_no_hook = true;
-  int ret = original_posix_memalign(memptr, alignment, size);
+  check_mempool_initialized();
+
+  *memptr = tlsf_aligned_malloc(alignment, size);
 
   locked_logging(HookType::PosixMemalign, *memptr, size, NULL);
-
   posix_memalign_no_hook = false;
-  return ret;
+  return 0;
 }
 
 void* memalign(size_t alignment, size_t size) {
@@ -318,11 +350,14 @@ void* memalign(size_t alignment, size_t size) {
   static __thread bool memalign_no_hook = false;
 
   if (memalign_no_hook || pthread_self() == logging_thread) {
-    return original_memalign(alignment, size);
+    if (mempool_initialized) return tlsf_aligned_malloc(alignment, size);
+    else return original_memalign(alignment, size);
   }
 
   memalign_no_hook = true;
-  void *ret = original_memalign(alignment, size);
+  check_mempool_initialized();
+
+  void *ret = tlsf_aligned_malloc(alignment, size);
 
   locked_logging(HookType::Memalign, ret, size, NULL);
 
@@ -334,17 +369,17 @@ void* aligned_alloc(size_t alignment, size_t size) {
   static aligned_alloc_type original_aligned_alloc = reinterpret_cast<aligned_alloc_type>(dlsym(RTLD_NEXT, "aligned_alloc"));
   static __thread bool aligned_alloc_no_hook = false;
 
-  check_mempool_initialized();
-
   if (aligned_alloc_no_hook || pthread_self() == logging_thread) {
-    return original_aligned_alloc(alignment, size);
+    if (mempool_initialized) return tlsf_aligned_malloc(alignment, size);
+    else return original_aligned_alloc(alignment, size);
   }
 
   aligned_alloc_no_hook = true;
-  void *ret = original_aligned_alloc(alignment, size);
+  check_mempool_initialized();
+
+  void *ret = tlsf_aligned_malloc(alignment, size);
 
   locked_logging(HookType::AlignedAlloc, ret, size, NULL);
-
   aligned_alloc_no_hook = false;
   return ret;
 }
@@ -352,15 +387,17 @@ void* aligned_alloc(size_t alignment, size_t size) {
 void* valloc(size_t size) {
   static valloc_type original_valloc = reinterpret_cast<valloc_type>(dlsym(RTLD_NEXT, "valloc"));
   static __thread bool valloc_no_hook = false;
-
-  check_mempool_initialized();
+  static size_t page_size = sysconf(_SC_PAGESIZE);
 
   if (valloc_no_hook || pthread_self() == logging_thread) {
-    return original_valloc(size);
+    if (mempool_initialized) return tlsf_aligned_malloc(page_size, size);
+    else return original_valloc(size);
   }
 
   valloc_no_hook = true;
-  void *ret = original_valloc(size);
+  check_mempool_initialized();
+
+  void *ret = tlsf_aligned_malloc(page_size, size);
 
   locked_logging(HookType::Valloc, ret, size, NULL);
   valloc_no_hook = false;
@@ -369,21 +406,22 @@ void* valloc(size_t size) {
 }
 
 void* pvalloc(size_t size) {
-  static pvalloc_type original_palloc = reinterpret_cast<pvalloc_type>(dlsym(RTLD_NEXT, "pvalloc"));
+  static pvalloc_type original_pvalloc = reinterpret_cast<pvalloc_type>(dlsym(RTLD_NEXT, "pvalloc"));
   static __thread bool pvalloc_no_hook = false;
-
-  check_mempool_initialized();
+  static size_t page_size = sysconf(_SC_PAGESIZE);
+  size_t rounded_up = size + (page_size - size % page_size) % page_size;
 
   if (pvalloc_no_hook || pthread_self() == logging_thread) {
-    return original_palloc(size);
+    if (mempool_initialized) return tlsf_aligned_malloc(page_size, rounded_up);
+    return original_pvalloc(size);
   }
 
   pvalloc_no_hook = true;
-  void *ret = pvalloc(size);
+  check_mempool_initialized();
+
+  void *ret = tlsf_aligned_malloc(page_size, rounded_up);
 
   // pvalloc() rounds the size of the allocation up to the next multiple of the system page size.
-  size_t page_size = sysconf(_SC_PAGESIZE);
-  size_t rounded_up = size + (page_size - size % page_size) % page_size;
   locked_logging(HookType::Pvalloc, ret, rounded_up, NULL);
 
   return ret;

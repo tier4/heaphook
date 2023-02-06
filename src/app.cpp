@@ -29,7 +29,23 @@ int main() {
       perror("posix_memalign error");
     }
 
-    std::cout << "posix_memalign allocated at " << ptr << std::endl;
+    std::cout << "In user program: posix_memalign allocated at " << ptr << std::endl;
+
+    free(ptr);
+    std::cout << "In user program: free(" << ptr << ")" << std::endl;
+  }
+
+  {
+    void* ptr;
+    int ret = posix_memalign(&ptr, 32, 1111);
+    if (ret != 0) {
+      perror("posix_memalign error");
+    }
+
+    std::cout << "In user program: posix_memalign allocated at " << ptr << std::endl;
+
+    void *ptr2 = realloc(ptr, 1212);
+    std::cout << "In user program: re-allocated at " << ptr2 << std::endl;
   }
 
   {
