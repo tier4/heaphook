@@ -53,7 +53,7 @@ std::string type_names[10] = {"malloc", "free", "calloc", "realloc",
   "malloc_usable_size"};
 
 static char *mempool_ptr;
-static const size_t MEMPOOL_SIZE = 1000 * 1000 * 1000;
+static const size_t MEMPOOL_SIZE = 100 * 1000 * 1000;
 static std::unordered_map<void*, void*> *aligned2orig;
 
 struct LogEntry {
@@ -85,6 +85,8 @@ static pthread_t logging_thread;
 static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t not_full_cond = PTHREAD_COND_INITIALIZER; // avail_num < (BUFFER_SIZE - 1)
 static pthread_cond_t not_empty_cond = PTHREAD_COND_INITIALIZER; // avail_num > 0
+
+static pthread_mutex_t tlsf_mtx = PTHREAD_MUTEX_INITIALIZER;
 
 static void* logging_thread_fn(void *arg) {
   (void) arg;
@@ -207,7 +209,10 @@ void check_mempool_initialized() {
 }
 
 static void* tlsf_aligned_malloc(size_t alignment, size_t size) {
+  pthread_mutex_lock(&tlsf_mtx);
   void *addr = tlsf_malloc(alignment + size);
+  pthread_mutex_unlock(&tlsf_mtx);
+
   void* aligned = reinterpret_cast<void*>(reinterpret_cast<uint64_t>(addr) + alignment - reinterpret_cast<uint64_t>(addr) % alignment);
   (*aligned2orig)[aligned] = addr;
 
@@ -223,8 +228,14 @@ void *malloc(size_t size) {
   static __thread bool malloc_no_hook = false;
 
   if (malloc_no_hook || pthread_self() == logging_thread) {
-    if (mempool_initialized) return tlsf_malloc(size);
-    else return original_malloc(size);
+    if (mempool_initialized) {
+      pthread_mutex_lock(&tlsf_mtx);
+      void *ret = tlsf_malloc(size);
+      pthread_mutex_unlock(&tlsf_mtx);
+      return ret;
+    } else {
+      return original_malloc(size);
+    }
   }
 
   malloc_no_hook = true;
@@ -234,7 +245,9 @@ void *malloc(size_t size) {
   //void *caller = __builtin_return_address(0);
 
   // void *ret = original_malloc(size);
+  pthread_mutex_lock(&tlsf_mtx);
   void *ret = tlsf_malloc(size);
+  pthread_mutex_unlock(&tlsf_mtx);
 
   //std::cout << caller << ": malloc(" << size << ") -> " << ret << std::endl;
   //printf("%p: malloc(%lu) -> %p\n", caller, size, ret);
@@ -250,8 +263,14 @@ void free(void* ptr) {
   static __thread bool free_no_hook = false;
 
   if (free_no_hook || pthread_self() == logging_thread) {
-    if (mempool_initialized) tlsf_free(ptr);
-    else original_free(ptr);
+    if (mempool_initialized) {
+      pthread_mutex_lock(&tlsf_mtx);
+      tlsf_free(ptr);
+      pthread_mutex_unlock(&tlsf_mtx);
+    } else {
+      original_free(ptr);
+    }
+
     return;
   }
 
@@ -267,7 +286,9 @@ void free(void* ptr) {
     aligned2orig->erase(it);
   }
 
+  pthread_mutex_lock(&tlsf_mtx);
   tlsf_free(ptr);
+  pthread_mutex_unlock(&tlsf_mtx);
   //printf("%p: free(%p)\n", caller, ptr);
 
   locked_logging(HookType::Free, ptr, 0, NULL);
@@ -280,15 +301,23 @@ void* calloc(size_t num, size_t size) {
   static __thread bool calloc_no_hook = false;
 
   if (calloc_no_hook || pthread_self() == logging_thread) {
-    if (mempool_initialized) return tlsf_calloc(num, size);
-    else return original_calloc(num, size);
+    if (mempool_initialized) {
+      pthread_mutex_lock(&tlsf_mtx);
+      void *ret = tlsf_calloc(num, size);
+      pthread_mutex_unlock(&tlsf_mtx);
+      return ret;
+    } else {
+      return original_calloc(num, size);
+    }
   }
 
   calloc_no_hook = true;
 
   check_mempool_initialized();
 
+  pthread_mutex_lock(&tlsf_mtx);
   void *ret = tlsf_calloc(num, size);
+  pthread_mutex_unlock(&tlsf_mtx);
 
   locked_logging(HookType::Calloc, ret, num * size, NULL);
 
@@ -302,8 +331,14 @@ void* realloc(void *ptr, size_t new_size) {
   static __thread bool realloc_no_hook = false;
 
   if (realloc_no_hook || pthread_self() == logging_thread) {
-    if (mempool_initialized) return tlsf_realloc(ptr, new_size);
-    else return original_realloc(ptr, new_size);
+    if (mempool_initialized) {
+      pthread_mutex_lock(&tlsf_mtx);
+      void *ret = tlsf_realloc(ptr, new_size);
+      pthread_mutex_unlock(&tlsf_mtx);
+      return ret;
+    } else {
+      return original_realloc(ptr, new_size);
+    }
   }
 
   realloc_no_hook = true;
@@ -317,7 +352,9 @@ void* realloc(void *ptr, size_t new_size) {
     aligned2orig->erase(ptr);
   }
 
+  pthread_mutex_lock(&tlsf_mtx);
   void *ret = tlsf_realloc(ptr, new_size);
+  pthread_mutex_unlock(&tlsf_mtx);
 
   locked_logging(HookType::Realloc, ptr, new_size, ret);
 
