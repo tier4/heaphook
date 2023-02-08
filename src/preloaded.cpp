@@ -10,6 +10,8 @@
 #include <fstream>
 #include <string>
 
+#include <malloc.h>
+
 using malloc_type = void*(*)(size_t);
 using free_type = void(*)(void*);
 using calloc_type = void*(*)(size_t, size_t);
@@ -326,9 +328,55 @@ size_t malloc_usable_size(void *ptr) {
   static malloc_usable_size_type original_malloc_usable_size = \
     reinterpret_cast<malloc_usable_size_type>(dlsym(RTLD_NEXT, "malloc_usable_size"));
 
+  printf("hoge: malloc_usable_size called\n");
+
   size_t ret = original_malloc_usable_size(ptr);
   locked_logging(HookType::MallocUsableSize, ptr, ret, NULL);
   return ret;
+}
+
+
+using mallinfo_type = struct mallinfo(*)(void);
+struct mallinfo mallinfo() {
+  static mallinfo_type orig = reinterpret_cast<mallinfo_type>(dlsym(RTLD_NEXT, "mallinfo"));
+  printf("hoge: mallinfo called\n");
+  return orig();
+}
+
+using mallinfo2_type = struct mallinfo2(*)(void);
+struct mallinfo2 mallinfo2() {
+  static mallinfo2_type orig = reinterpret_cast<mallinfo2_type>(dlsym(RTLD_NEXT, "mallinfo2"));
+  printf("hoge: mallinfo2 called\n");
+  return orig();
+}
+
+using mallopt_type = int(*)(int, int);
+int mallopt(int param, int value) {
+  static mallopt_type orig = reinterpret_cast<mallopt_type>(dlsym(RTLD_NEXT, "mallopt"));
+  printf("hoge: mallopt called\n");
+  return orig(param, value);
+}
+
+using malloc_trim_type = int(*)(size_t);
+int malloc_trim(size_t pad) {
+  static malloc_trim_type orig = reinterpret_cast<malloc_trim_type>(dlsym(RTLD_NEXT, "malloc_trim"));
+  printf("hoge: malloc_trim called\n");
+  return orig(pad);
+}
+
+using malloc_stats_type = void(*)(void);
+void malloc_stats(void) {
+  static malloc_stats_type orig = reinterpret_cast<malloc_stats_type>(dlsym(RTLD_NEXT, "malloc_stats"));
+  printf("hoge: malloc_stats\n");
+  orig();
+  return;
+}
+
+using malloc_info_type = int(*)(int, FILE*);
+int malloc_info(int options, FILE *stream) {
+  static malloc_info_type orig = reinterpret_cast<malloc_info_type>(dlsym(RTLD_NEXT, "malloc_info"));
+  printf("hoge: malloc_info called\n");
+  return orig(options, stream);
 }
 
 } // extern "C"

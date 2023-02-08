@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <sys/mman.h>
 #include <string.h>
+#include <malloc.h>
 
 #include <iostream>
 #include <fstream>
@@ -52,7 +53,7 @@ std::string type_names[10] = {"malloc", "free", "calloc", "realloc",
   "malloc_usable_size"};
 
 static char *mempool_ptr;
-static const size_t MEMPOOL_SIZE = 1 * 1000 * 1000 * 1000;
+static const size_t MEMPOOL_SIZE = 100 * 1000 * 1000;
 static std::unordered_map<void*, void*> aligned2orig;
 
 struct LogEntry {
@@ -62,7 +63,7 @@ struct LogEntry {
   void* new_addr; // used for realloc (otherwise NULL)
 };
 
-static const size_t BUFFER_SIZE = 10000000;
+static const size_t BUFFER_SIZE = 100000;
 static const size_t LOG_BATCH_SIZE = 100;
 
 static LogEntry log[BUFFER_SIZE];
@@ -433,9 +434,54 @@ size_t malloc_usable_size(void *ptr) {
 
   check_mempool_initialized();
 
+  printf("hoge: malloc_usable_size called\n");
+
   size_t ret = original_malloc_usable_size(ptr);
   locked_logging(HookType::MallocUsableSize, ptr, ret, NULL);
   return ret;
+}
+
+using mallinfo_type = struct mallinfo(*)(void);
+struct mallinfo mallinfo() {
+  static mallinfo_type orig = reinterpret_cast<mallinfo_type>(dlsym(RTLD_NEXT, "mallinfo"));
+  printf("hoge: mallinfo called\n");
+  return orig();
+}
+
+using mallinfo2_type = struct mallinfo2(*)(void);
+struct mallinfo2 mallinfo2() {
+  static mallinfo2_type orig = reinterpret_cast<mallinfo2_type>(dlsym(RTLD_NEXT, "mallinfo2"));
+  printf("hoge: mallinfo2 called\n");
+  return orig();
+}
+
+using mallopt_type = int(*)(int, int);
+int mallopt(int param, int value) {
+  static mallopt_type orig = reinterpret_cast<mallopt_type>(dlsym(RTLD_NEXT, "mallopt"));
+  printf("hoge: mallopt called\n");
+  return orig(param, value);
+}
+
+using malloc_trim_type = int(*)(size_t);
+int malloc_trim(size_t pad) {
+  static malloc_trim_type orig = reinterpret_cast<malloc_trim_type>(dlsym(RTLD_NEXT, "malloc_trim"));
+  printf("hoge: malloc_trim called\n");
+  return orig(pad);
+}
+
+using malloc_stats_type = void(*)(void);
+void malloc_stats(void) {
+  static malloc_stats_type orig = reinterpret_cast<malloc_stats_type>(dlsym(RTLD_NEXT, "malloc_stats"));
+  printf("hoge: malloc_stats\n");
+  orig();
+  return;
+}
+
+using malloc_info_type = int(*)(int, FILE*);
+int malloc_info(int options, FILE *stream) {
+  static malloc_info_type orig = reinterpret_cast<malloc_info_type>(dlsym(RTLD_NEXT, "malloc_info"));
+  printf("malloc_info called\n");
+  return orig(options, stream);
 }
 
 } // extern "C"
