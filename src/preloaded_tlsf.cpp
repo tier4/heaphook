@@ -53,8 +53,8 @@ std::string type_names[10] = {"malloc", "free", "calloc", "realloc",
   "malloc_usable_size"};
 
 static char *mempool_ptr;
-static const size_t MEMPOOL_SIZE = 100 * 1000 * 1000;
-static std::unordered_map<void*, void*> aligned2orig;
+static const size_t MEMPOOL_SIZE = 1000 * 1000 * 1000;
+static std::unordered_map<void*, void*> *aligned2orig;
 
 struct LogEntry {
   HookType type;
@@ -193,6 +193,8 @@ void check_mempool_initialized() {
 
     initialize_mempool();
 
+    aligned2orig = new std::unordered_map<void*, void*>();
+
     mempool_initialized = true;
     pthread_cond_signal(&init_cond);
   } else {
@@ -207,7 +209,7 @@ void check_mempool_initialized() {
 static void* tlsf_aligned_malloc(size_t alignment, size_t size) {
   void *addr = tlsf_malloc(alignment + size);
   void* aligned = reinterpret_cast<void*>(reinterpret_cast<uint64_t>(addr) + alignment - reinterpret_cast<uint64_t>(addr) % alignment);
-  aligned2orig[aligned] = addr;
+  (*aligned2orig)[aligned] = addr;
 
   //printf("In tlsf_aligned_malloc: orig=%p -> aligned=%p\n", addr, aligned);
 
@@ -258,11 +260,11 @@ void free(void* ptr) {
   check_mempool_initialized();
 
   //void *caller = __builtin_return_address(0);
-  auto it = aligned2orig.find(ptr);
-  if (it != aligned2orig.end()) {
+  auto it = aligned2orig->find(ptr);
+  if (it != aligned2orig->end()) {
     //printf("In free: aligned=%p -> orig=%p\n", it->first, it->second);
     ptr = it->second;
-    aligned2orig.erase(it);
+    aligned2orig->erase(it);
   }
 
   tlsf_free(ptr);
@@ -308,11 +310,11 @@ void* realloc(void *ptr, size_t new_size) {
 
   check_mempool_initialized();
 
-  auto it = aligned2orig.find(ptr);
-  if (it != aligned2orig.end()) {
+  auto it = aligned2orig->find(ptr);
+  if (it != aligned2orig->end()) {
     //printf("In realloc: aligned=%p -> orig=%p\n", it->first, it->second);
     ptr = it->second;
-    aligned2orig.erase(ptr);
+    aligned2orig->erase(ptr);
   }
 
   void *ret = tlsf_realloc(ptr, new_size);
