@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <unordered_map>
+#include <string>
 
 #include "tlsf/tlsf.h"
 
@@ -30,8 +31,8 @@ using pvalloc_type = void*(*)(size_t);
 using malloc_usable_size_type = size_t(*)(void*);
 
 static char *mempool_ptr;
-static const size_t MEMPOOL_SIZE = 100 * 1000 * 1000;
-static const size_t ADDITIONAL_MEMPOOL_SIZE = 100 * 1000 * 1000;
+static size_t INITIAL_MEMPOOL_SIZE = 100 * 1000 * 1000; // default: 100MB
+static size_t ADDITIONAL_MEMPOOL_SIZE = 100 * 1000 * 1000; // default: 100MB
 static std::unordered_map<void*, void*> *aligned2orig;
 
 static pthread_mutex_t init_mtx = PTHREAD_MUTEX_INITIALIZER;
@@ -42,9 +43,17 @@ static bool mempool_init_started = false; // guarded by init_mtx
 static pthread_mutex_t tlsf_mtx = PTHREAD_MUTEX_INITIALIZER;
 
 static void initialize_mempool() {
-  mempool_ptr = (char *) mmap(NULL, MEMPOOL_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  memset(mempool_ptr, 0, MEMPOOL_SIZE);
-  init_memory_pool(MEMPOOL_SIZE, mempool_ptr); // tlsf library function
+  if (const char* env_p = std::getenv("INITIAL_MEMPOOL_SIZE")) {
+    INITIAL_MEMPOOL_SIZE = std::stoull(std::string(env_p));
+  }
+
+  if (const char* env_p = std::getenv("ADDITIONAL_MEMPOOL_SIZE")) {
+    ADDITIONAL_MEMPOOL_SIZE = std::stoull(std::string(env_p));
+  }
+
+  mempool_ptr = (char *) mmap(NULL, INITIAL_MEMPOOL_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  memset(mempool_ptr, 0, INITIAL_MEMPOOL_SIZE);
+  init_memory_pool(INITIAL_MEMPOOL_SIZE, mempool_ptr); // tlsf library function
 
   // aligned2orig.reserve(10000000);
 }
