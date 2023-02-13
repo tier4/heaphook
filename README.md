@@ -55,5 +55,43 @@ As an example, here is what happens when `malloc(1000)` is called when the exist
 3. 400 bytes added to the memory pool (still not sufficient)
 4. 800 bytes added to the memory pool (still not sufficient)
 5. 1600 bytes added to the memory pool (finally sufficient)
+
 The added memory pool areas are not contiguous with each other in the virual address space,
 so it is not necessarily enough even if the total size of the added memory pools exceeds the size of the memory allocation request. 
+
+## Integrate with ROS2 launch
+You can easily integrate `heaphook` with ROS2 launch systems.
+From the launch file, you can replace all heap allocations of the process corresponding to the targeted `Node` and `ComposableNodeContainer`.
+
+```xml
+<node pkg="..." exec="..." name="...">
+  <env name="LD_PRELOAD" value="libpreloaded_heaptrack.so" />
+</node>
+```
+
+```xml
+<node pkg="..." exec="..." name="...">
+  <env name="LD_PRELOAD" value="libpreloaded_tlsf.so />
+  <env name="INITIAL_MEMPOOL_SIZE" value="100000000" />
+  <env name="ADDITIONAL_MEMPOOL_SIZE" value="100000000" />
+</node>
+```
+
+```python
+container = ComposableNodeContainer(
+  ...,
+  additional_env={"LD_PRELOAD": "libpreloaded_heaptrack.so"},
+)
+```
+
+```python
+container = ComposableNodeContainer(
+  ...,
+  additional_env={
+    "LD_PRELOAD": "libpreloaded_tlsf.so",
+    "INITIAL_MEMPOOL_SIZE": "100000000", # 100MB
+    "ADDITIONAL_MEMPOOL_SIZE": "100000000",
+  },
+)
+```
+
