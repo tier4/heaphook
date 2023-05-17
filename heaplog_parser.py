@@ -139,21 +139,13 @@ def visualize(output_fname):
     plt.savefig(output_fname)
     print('Figure is saved as {}'.format(output_fname))
 
-<<<<<<< Updated upstream
-
-if __name__ == "__main__":
-=======
 if __name__ == '__main__':
->>>>>>> Stashed changes
     read_heap_history(sys.argv[1])
 
     heap_history.resize(heap_history_num)
 
     # Assumes 'heaplog.{pid}.log'
     input_fname = os.path.basename(sys.argv[1]).split('.')
-<<<<<<< Updated upstream
-    visualize("{}.{}.pdf".format(input_fname[0], input_fname[1]))
-=======
     visualize('{}.{}.pdf'.format(input_fname[0], input_fname[1]))
 
 >>>>>>> Stashed changes
