@@ -1,4 +1,3 @@
-from enum import Enum
 import mmap
 import sys
 import os
@@ -9,6 +8,7 @@ from progress.bar import ShadyBar
 
 heap_history = np.empty(1, dtype=np.int64)
 heap_history_num = 1
+
 
 def read_heap_history(filename):
     global heap_history, heap_history_num
@@ -42,7 +42,9 @@ def read_heap_history(filename):
 
             va.seek(0)
 
-            progress_bar = ShadyBar("Progress", max=line_num, suffix="%(percent).1f%% - Elapsed: %(elapsed)ds")
+            progress_bar = ShadyBar(
+                "Progress", max=line_num, suffix="%(percent).1f%% - Elapsed: %(elapsed)ds"
+            )
 
             for line in iter(va.readline, b""):
                 hook_type, addr, size, new_addr = line.rstrip().split()
@@ -57,7 +59,10 @@ def read_heap_history(filename):
                 if (addr == 0):
                     continue
 
-                if hook_type in [b'malloc', b'calloc', b'posix_memalign', b'memalign', b'aligned_alloc', b'valloc', b'pvalloc']:
+                if hook_type in [
+                    b'malloc', b'calloc', b'posix_memalign', b'memalign',
+                    b'aligned_alloc', b'valloc', b'pvalloc'
+                ]:
                     addr2size[addr] = size
                     heap_history[heap_history_num] = heap_history[heap_history_num - 1] + size
 
@@ -81,20 +86,22 @@ def read_heap_history(filename):
                 elif hook_type == b'free':
                     free_num += 1
 
-                    if not addr in addr2size:
+                    if addr not in addr2size:
                         key_not_found += 1
                         continue
 
-                    heap_history[heap_history_num] = heap_history[heap_history_num - 1] - addr2size[addr]
+                    heap_history[heap_history_num] = heap_history[heap_history_num - 1] \
+                        - addr2size[addr]
                     del addr2size[addr]
                 elif hook_type == b'realloc':
                     realloc_num += 1
 
-                    if not addr in addr2size:
+                    if addr not in addr2size:
                         key_not_found += 1
                         continue
 
-                    heap_history[heap_history_num] = heap_history[heap_history_num - 1] - addr2size[addr]
+                    heap_history[heap_history_num] = heap_history[heap_history_num - 1] \
+                        - addr2size[addr]
                     del addr2size[addr]
                     heap_history[heap_history_num] += size
                     addr2size[new_addr] = size
@@ -116,6 +123,7 @@ def read_heap_history(filename):
             print("pvalloc is called {} times".format(pvalloc_num))
             print("malloc_usable_size is called {} times".format(malloc_usable_size_num))
 
+
 def visualize(output_fname):
     fig = plt.figure(figsize=(16, 16))
     ax = fig.add_subplot(1, 1, 1)
@@ -127,6 +135,7 @@ def visualize(output_fname):
     plt.savefig(output_fname)
     print("Figure is saved as {}".format(output_fname))
 
+
 if __name__ == "__main__":
     read_heap_history(sys.argv[1])
 
@@ -135,4 +144,3 @@ if __name__ == "__main__":
     # Assumes "heaplog.{pid}.log"
     input_fname = os.path.basename(sys.argv[1]).split('.')
     visualize("{}.{}.pdf".format(input_fname[0], input_fname[1]))
-

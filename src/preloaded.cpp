@@ -12,25 +12,26 @@
 
 #include <malloc.h>
 
-using malloc_type = void*(*)(size_t);
-using free_type = void(*)(void*);
-using calloc_type = void*(*)(size_t, size_t);
-using realloc_type = void*(*)(void*, size_t);
+using malloc_type = void * (*)(size_t);
+using free_type = void (*)(void *);
+using calloc_type = void * (*)(size_t, size_t);
+using realloc_type = void * (*)(void *, size_t);
 
 // Aligned allocation
-using posix_memalign_type = int(*)(void **, size_t, size_t);
-using memalign_type = void*(*)(size_t, size_t);
-using aligned_alloc_type = void*(*)(size_t, size_t);
-using valloc_type = void*(*)(size_t);
-using pvalloc_type = void*(*)(size_t);
+using posix_memalign_type = int (*)(void **, size_t, size_t);
+using memalign_type = void * (*)(size_t, size_t);
+using aligned_alloc_type = void * (*)(size_t, size_t);
+using valloc_type = void * (*)(size_t);
+using pvalloc_type = void * (*)(size_t);
 
-using malloc_usable_size_type = size_t(*)(void*);
+using malloc_usable_size_type = size_t (*)(void *);
 
 /*
  * We don't hook reallocarray() function because realloc() is called from reallocarray().
 */
 
-enum class HookType {
+enum class HookType
+{
   Malloc,
   Free,
   Calloc,
@@ -47,11 +48,12 @@ std::string type_names[10] = {"malloc", "free", "calloc", "realloc",
   "posix_memalign", "memalign", "aligned_alloc", "valloc", "pvalloc",
   "malloc_usable_size"};
 
-struct LogEntry {
+struct LogEntry
+{
   HookType type;
-  void* addr;
+  void * addr;
   size_t size;
-  void* new_addr; // used for realloc (otherwise NULL)
+  void * new_addr; // used for realloc (otherwise NULL)
 };
 
 static const size_t BUFFER_SIZE = 10000000;
@@ -72,7 +74,8 @@ static pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t not_full_cond = PTHREAD_COND_INITIALIZER; // avail_num < (BUFFER_SIZE - 1)
 static pthread_cond_t not_empty_cond = PTHREAD_COND_INITIALIZER; // avail_num > 0
 
-static void* logging_thread_fn(void *arg) {
+static void * logging_thread_fn(void * arg)
+{
   (void) arg;
 
   while (true) {
@@ -98,7 +101,7 @@ static void* logging_thread_fn(void *arg) {
     std::ofstream ofs("heaplog." + std::to_string(getpid()) + ".log", std::ios::app);
     for (size_t i = 0; i < sz; i++) {
       ofs << type_names[static_cast<int>(log_buffer[i].type)] << " " << log_buffer[i].addr
-        << " " << log_buffer[i].size << " " << log_buffer[i].new_addr << std::endl;
+          << " " << log_buffer[i].size << " " << log_buffer[i].new_addr << std::endl;
     }
     ofs.close();
 
@@ -113,7 +116,8 @@ static void* logging_thread_fn(void *arg) {
   }
 }
 
-static void locked_logging(HookType hook_type, void *addr, size_t size, void *new_addr) {
+static void locked_logging(HookType hook_type, void * addr, size_t size, void * new_addr)
+{
   pthread_mutex_lock(&mtx);
 
   while (avail_num == BUFFER_SIZE - 1) {
@@ -134,7 +138,8 @@ static void locked_logging(HookType hook_type, void *addr, size_t size, void *ne
   }
 }
 
-static void __attribute__((destructor)) fini() {
+static void __attribute__((destructor)) fini()
+{
   pthread_mutex_lock(&mtx);
   library_unloaded = true;
   pthread_mutex_unlock(&mtx);
@@ -142,7 +147,8 @@ static void __attribute__((destructor)) fini() {
   pthread_join(logging_thread, NULL);
 }
 
-static void __attribute__((constructor)) init() {
+static void __attribute__((constructor)) init()
+{
   pthread_mutex_lock(&mtx);
 
   // first touch
@@ -161,7 +167,8 @@ static void __attribute__((constructor)) init() {
 
 extern "C" {
 
-void *malloc(size_t size) {
+void * malloc(size_t size)
+{
   static malloc_type original_malloc = reinterpret_cast<malloc_type>(dlsym(RTLD_NEXT, "malloc"));
   static __thread bool malloc_no_hook = false;
 
@@ -172,7 +179,7 @@ void *malloc(size_t size) {
   malloc_no_hook = true;
 
   //void *caller = __builtin_return_address(0);
-  void *ret = original_malloc(size);
+  void * ret = original_malloc(size);
   //std::cout << caller << ": malloc(" << size << ") -> " << ret << std::endl;
   //printf("%p: malloc(%lu) -> %p\n", caller, size, ret);
 
@@ -182,7 +189,8 @@ void *malloc(size_t size) {
   return ret;
 }
 
-void free(void* ptr) {
+void free(void * ptr)
+{
   static free_type original_free = reinterpret_cast<free_type>(dlsym(RTLD_NEXT, "free"));
   static __thread bool free_no_hook = false;
 
@@ -201,7 +209,8 @@ void free(void* ptr) {
   free_no_hook = false;
 }
 
-void* calloc(size_t num, size_t size) {
+void * calloc(size_t num, size_t size)
+{
   static calloc_type original_calloc = reinterpret_cast<calloc_type>(dlsym(RTLD_NEXT, "calloc"));
   static __thread bool calloc_no_hook = false;
 
@@ -211,7 +220,7 @@ void* calloc(size_t num, size_t size) {
 
   calloc_no_hook = true;
 
-  void *ret = original_calloc(num, size);
+  void * ret = original_calloc(num, size);
 
   locked_logging(HookType::Calloc, ret, num * size, NULL);
 
@@ -220,8 +229,10 @@ void* calloc(size_t num, size_t size) {
   return ret;
 }
 
-void* realloc(void *ptr, size_t new_size) {
-  static realloc_type original_realloc = reinterpret_cast<realloc_type>(dlsym(RTLD_NEXT, "realloc"));
+void * realloc(void * ptr, size_t new_size)
+{
+  static realloc_type original_realloc =
+    reinterpret_cast<realloc_type>(dlsym(RTLD_NEXT, "realloc"));
   static __thread bool realloc_no_hook = false;
 
   if (realloc_no_hook || pthread_self() == logging_thread) {
@@ -229,7 +240,7 @@ void* realloc(void *ptr, size_t new_size) {
   }
 
   realloc_no_hook = true;
-  void *ret = original_realloc(ptr, new_size);
+  void * ret = original_realloc(ptr, new_size);
 
   locked_logging(HookType::Realloc, ptr, new_size, ret);
 
@@ -237,8 +248,10 @@ void* realloc(void *ptr, size_t new_size) {
   return ret;
 }
 
-int posix_memalign(void **memptr, size_t alignment, size_t size) {
-  static posix_memalign_type original_posix_memalign = reinterpret_cast<posix_memalign_type>(dlsym(RTLD_NEXT, "posix_memalign"));
+int posix_memalign(void ** memptr, size_t alignment, size_t size)
+{
+  static posix_memalign_type original_posix_memalign =
+    reinterpret_cast<posix_memalign_type>(dlsym(RTLD_NEXT, "posix_memalign"));
   static __thread bool posix_memalign_no_hook = false;
 
   if (posix_memalign_no_hook || pthread_self() == logging_thread) {
@@ -254,8 +267,10 @@ int posix_memalign(void **memptr, size_t alignment, size_t size) {
   return ret;
 }
 
-void* memalign(size_t alignment, size_t size) {
-  static memalign_type original_memalign = reinterpret_cast<memalign_type>(dlsym(RTLD_NEXT, "memalign"));
+void * memalign(size_t alignment, size_t size)
+{
+  static memalign_type original_memalign =
+    reinterpret_cast<memalign_type>(dlsym(RTLD_NEXT, "memalign"));
   static __thread bool memalign_no_hook = false;
 
   if (memalign_no_hook || pthread_self() == logging_thread) {
@@ -263,7 +278,7 @@ void* memalign(size_t alignment, size_t size) {
   }
 
   memalign_no_hook = true;
-  void *ret = original_memalign(alignment, size);
+  void * ret = original_memalign(alignment, size);
 
   locked_logging(HookType::Memalign, ret, size, NULL);
 
@@ -271,8 +286,10 @@ void* memalign(size_t alignment, size_t size) {
   return ret;
 }
 
-void* aligned_alloc(size_t alignment, size_t size) {
-  static aligned_alloc_type original_aligned_alloc = reinterpret_cast<aligned_alloc_type>(dlsym(RTLD_NEXT, "aligned_alloc"));
+void * aligned_alloc(size_t alignment, size_t size)
+{
+  static aligned_alloc_type original_aligned_alloc =
+    reinterpret_cast<aligned_alloc_type>(dlsym(RTLD_NEXT, "aligned_alloc"));
   static __thread bool aligned_alloc_no_hook = false;
 
   if (aligned_alloc_no_hook || pthread_self() == logging_thread) {
@@ -280,7 +297,7 @@ void* aligned_alloc(size_t alignment, size_t size) {
   }
 
   aligned_alloc_no_hook = true;
-  void *ret = original_aligned_alloc(alignment, size);
+  void * ret = original_aligned_alloc(alignment, size);
 
   locked_logging(HookType::AlignedAlloc, ret, size, NULL);
 
@@ -288,7 +305,8 @@ void* aligned_alloc(size_t alignment, size_t size) {
   return ret;
 }
 
-void* valloc(size_t size) {
+void * valloc(size_t size)
+{
   static valloc_type original_valloc = reinterpret_cast<valloc_type>(dlsym(RTLD_NEXT, "valloc"));
   static __thread bool valloc_no_hook = false;
 
@@ -297,7 +315,7 @@ void* valloc(size_t size) {
   }
 
   valloc_no_hook = true;
-  void *ret = original_valloc(size);
+  void * ret = original_valloc(size);
 
   locked_logging(HookType::Valloc, ret, size, NULL);
   valloc_no_hook = false;
@@ -305,7 +323,8 @@ void* valloc(size_t size) {
   return ret;
 }
 
-void* pvalloc(size_t size) {
+void * pvalloc(size_t size)
+{
   static pvalloc_type original_palloc = reinterpret_cast<pvalloc_type>(dlsym(RTLD_NEXT, "pvalloc"));
   static __thread bool pvalloc_no_hook = false;
 
@@ -314,7 +333,7 @@ void* pvalloc(size_t size) {
   }
 
   pvalloc_no_hook = true;
-  void *ret = pvalloc(size);
+  void * ret = pvalloc(size);
 
   // pvalloc() rounds the size of the allocation up to the next multiple of the system page size.
   size_t page_size = sysconf(_SC_PAGESIZE);
@@ -324,7 +343,8 @@ void* pvalloc(size_t size) {
   return ret;
 }
 
-size_t malloc_usable_size(void *ptr) {
+size_t malloc_usable_size(void * ptr)
+{
   static malloc_usable_size_type original_malloc_usable_size = \
     reinterpret_cast<malloc_usable_size_type>(dlsym(RTLD_NEXT, "malloc_usable_size"));
 
@@ -336,45 +356,54 @@ size_t malloc_usable_size(void *ptr) {
 }
 
 
-using mallinfo_type = struct mallinfo(*)(void);
-struct mallinfo mallinfo() {
+using mallinfo_type = struct mallinfo (*)( void);
+struct mallinfo mallinfo()
+{
   static mallinfo_type orig = reinterpret_cast<mallinfo_type>(dlsym(RTLD_NEXT, "mallinfo"));
   printf("hoge: mallinfo called\n");
   return orig();
 }
 
-using mallinfo2_type = struct mallinfo2(*)(void);
-struct mallinfo2 mallinfo2() {
+using mallinfo2_type = struct mallinfo2 (*)( void);
+struct mallinfo2 mallinfo2()
+{
   static mallinfo2_type orig = reinterpret_cast<mallinfo2_type>(dlsym(RTLD_NEXT, "mallinfo2"));
   printf("hoge: mallinfo2 called\n");
   return orig();
 }
 
-using mallopt_type = int(*)(int, int);
-int mallopt(int param, int value) {
+using mallopt_type = int (*)(int, int);
+int mallopt(int param, int value)
+{
   static mallopt_type orig = reinterpret_cast<mallopt_type>(dlsym(RTLD_NEXT, "mallopt"));
   printf("hoge: mallopt called\n");
   return orig(param, value);
 }
 
-using malloc_trim_type = int(*)(size_t);
-int malloc_trim(size_t pad) {
-  static malloc_trim_type orig = reinterpret_cast<malloc_trim_type>(dlsym(RTLD_NEXT, "malloc_trim"));
+using malloc_trim_type = int (*)(size_t);
+int malloc_trim(size_t pad)
+{
+  static malloc_trim_type orig =
+    reinterpret_cast<malloc_trim_type>(dlsym(RTLD_NEXT, "malloc_trim"));
   printf("hoge: malloc_trim called\n");
   return orig(pad);
 }
 
-using malloc_stats_type = void(*)(void);
-void malloc_stats(void) {
-  static malloc_stats_type orig = reinterpret_cast<malloc_stats_type>(dlsym(RTLD_NEXT, "malloc_stats"));
+using malloc_stats_type = void (*)(void);
+void malloc_stats(void)
+{
+  static malloc_stats_type orig =
+    reinterpret_cast<malloc_stats_type>(dlsym(RTLD_NEXT, "malloc_stats"));
   printf("hoge: malloc_stats\n");
   orig();
   return;
 }
 
-using malloc_info_type = int(*)(int, FILE*);
-int malloc_info(int options, FILE *stream) {
-  static malloc_info_type orig = reinterpret_cast<malloc_info_type>(dlsym(RTLD_NEXT, "malloc_info"));
+using malloc_info_type = int (*)(int, FILE *);
+int malloc_info(int options, FILE * stream)
+{
+  static malloc_info_type orig =
+    reinterpret_cast<malloc_info_type>(dlsym(RTLD_NEXT, "malloc_info"));
   printf("hoge: malloc_info called\n");
   return orig(options, stream);
 }
