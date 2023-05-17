@@ -42,7 +42,10 @@ def read_heap_history(filename):
 
             va.seek(0)
 
-            progress_bar = ShadyBar('Progress', max=line_num, suffix='%(percent).1f%% - Elapsed: %(elapsed)ds')
+            progress_bar = ShadyBar(
+                'Progress',
+                max=line_num,
+                suffix='%(percent).1f%% - Elapsed: %(elapsed)ds')
 
             for line in iter(va.readline, b''):
                 hook_type, addr, size, new_addr = line.rstrip().split()
@@ -88,8 +91,8 @@ def read_heap_history(filename):
                         key_not_found += 1
                         continue
 
-                    heap_history[heap_history_num] = heap_history[heap_history_num - 1] \
-                        - addr2size[addr]
+                    heap_history[heap_history_num] = heap_history[heap_history_num -
+                                                                  1] - addr2size[addr]
                     del addr2size[addr]
                 elif hook_type == b'realloc':
                     realloc_num += 1
@@ -98,8 +101,8 @@ def read_heap_history(filename):
                         key_not_found += 1
                         continue
 
-                    heap_history[heap_history_num] = heap_history[heap_history_num - 1] \
-                        - addr2size[addr]
+                    heap_history[heap_history_num] = heap_history[heap_history_num -
+                                                                  1] - addr2size[addr]
                     del addr2size[addr]
                     heap_history[heap_history_num] += size
                     addr2size[new_addr] = size
@@ -119,7 +122,8 @@ def read_heap_history(filename):
             print('aligned_alloc is called {} times'.format(aligned_alloc_num))
             print('valloc is called {} times'.format(valloc_num))
             print('pvalloc is called {} times'.format(pvalloc_num))
-            print('malloc_usable_size is called {} times'.format(malloc_usable_size_num))
+            print('malloc_usable_size is called {} times'.format(
+                malloc_usable_size_num))
 
 
 def visualize(output_fname):
@@ -132,6 +136,7 @@ def visualize(output_fname):
 
     plt.savefig(output_fname)
     print('Figure is saved as {}'.format(output_fname))
+
 
 if __name__ == '__main__':
     read_heap_history(sys.argv[1])
