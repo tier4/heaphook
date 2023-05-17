@@ -16,7 +16,7 @@ jobs:
           - humble
         include:
           # Humble Hawksbill (May 2022 - May 2027)
-          - docker_image: rostooling/setup-ros-docker:ubuntu-focal-ros-humble-ros-base-latest
+          - docker_image: rostooling/setup-ros-docker:ubuntu-jammy-ros-humble-ros-base-latest
             ros_distribution: humble
             ros_version: 2
     container:
