@@ -42,13 +42,7 @@ def read_heap_history(filename):
 
             va.seek(0)
 
-<<<<<<< Updated upstream
-            progress_bar = ShadyBar(
-                "Progress", max=line_num, suffix="%(percent).1f%% - Elapsed: %(elapsed)ds"
-            )
-=======
             progress_bar = ShadyBar('Progress', max=line_num, suffix='%(percent).1f%% - Elapsed: %(elapsed)ds')
->>>>>>> Stashed changes
 
             for line in iter(va.readline, b''):
                 hook_type, addr, size, new_addr = line.rstrip().split()
@@ -147,5 +141,3 @@ if __name__ == '__main__':
     # Assumes 'heaplog.{pid}.log'
     input_fname = os.path.basename(sys.argv[1]).split('.')
     visualize('{}.{}.pdf'.format(input_fname[0], input_fname[1]))
-
->>>>>>> Stashed changes
