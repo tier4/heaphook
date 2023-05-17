@@ -1,9 +1,9 @@
 import mmap
-import sys
 import os
+import sys
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from progress.bar import ShadyBar
 
 heap_history = np.empty(1, dtype=np.int64)
@@ -15,13 +15,13 @@ def read_heap_history(filename):
 
     addr2size = {}
 
-    with open(filename, mode="r", encoding="utf8") as f:
+    with open(filename, mode='r', encoding='utf8') as f:
         with mmap.mmap(f.fileno(), length=0, access=mmap.ACCESS_READ) as va:
             line_num = 0
-            print("counting the number of log entries...")
-            for line in iter(va.readline, b""):
+            print('counting the number of log entries...')
+            for line in iter(va.readline, b''):
                 line_num += 1
-            print(line_num, "entries found")
+            print(line_num, 'entries found')
 
             heap_history = np.empty(line_num + 1, dtype=np.int64)
             heap_history[0] = 0
@@ -42,11 +42,15 @@ def read_heap_history(filename):
 
             va.seek(0)
 
+<<<<<<< Updated upstream
             progress_bar = ShadyBar(
                 "Progress", max=line_num, suffix="%(percent).1f%% - Elapsed: %(elapsed)ds"
             )
+=======
+            progress_bar = ShadyBar('Progress', max=line_num, suffix='%(percent).1f%% - Elapsed: %(elapsed)ds')
+>>>>>>> Stashed changes
 
-            for line in iter(va.readline, b""):
+            for line in iter(va.readline, b''):
                 hook_type, addr, size, new_addr = line.rstrip().split()
                 addr = int(addr, 16)
                 size = int(size, 10)
@@ -81,7 +85,7 @@ def read_heap_history(filename):
                     elif hook_type == b'pvalloc':
                         pvalloc_num += 1
                     else:
-                        raise Exception("not reached")
+                        raise Exception('not reached')
 
                 elif hook_type == b'free':
                     free_num += 1
@@ -111,17 +115,17 @@ def read_heap_history(filename):
                 heap_history_num += 1
 
             progress_bar.finish()
-            print("key_not_found =", key_not_found)
-            print("malloc is called {} times".format(malloc_num))
-            print("calloc is called {} times".format(calloc_num))
-            print("realloc is called {} times".format(realloc_num))
-            print("free is called {} times".format(free_num))
-            print("posix_memalign is called {} times".format(posix_memalign_num))
-            print("memalign is called {} times".format(memalign_num))
-            print("aligned_alloc is called {} times".format(aligned_alloc_num))
-            print("valloc is called {} times".format(valloc_num))
-            print("pvalloc is called {} times".format(pvalloc_num))
-            print("malloc_usable_size is called {} times".format(malloc_usable_size_num))
+            print('key_not_found =', key_not_found)
+            print('malloc is called {} times'.format(malloc_num))
+            print('calloc is called {} times'.format(calloc_num))
+            print('realloc is called {} times'.format(realloc_num))
+            print('free is called {} times'.format(free_num))
+            print('posix_memalign is called {} times'.format(posix_memalign_num))
+            print('memalign is called {} times'.format(memalign_num))
+            print('aligned_alloc is called {} times'.format(aligned_alloc_num))
+            print('valloc is called {} times'.format(valloc_num))
+            print('pvalloc is called {} times'.format(pvalloc_num))
+            print('malloc_usable_size is called {} times'.format(malloc_usable_size_num))
 
 
 def visualize(output_fname):
@@ -129,18 +133,27 @@ def visualize(output_fname):
     ax = fig.add_subplot(1, 1, 1)
 
     ax.plot(heap_history)
-    ax.set_xlabel("Hook index")
-    ax.set_ylabel("Accumulated heap allocation size (bytes)")
+    ax.set_xlabel('Hook index')
+    ax.set_ylabel('Accumulated heap allocation size (bytes)')
 
     plt.savefig(output_fname)
-    print("Figure is saved as {}".format(output_fname))
+    print('Figure is saved as {}'.format(output_fname))
 
+<<<<<<< Updated upstream
 
 if __name__ == "__main__":
+=======
+if __name__ == '__main__':
+>>>>>>> Stashed changes
     read_heap_history(sys.argv[1])
 
     heap_history.resize(heap_history_num)
 
-    # Assumes "heaplog.{pid}.log"
+    # Assumes 'heaplog.{pid}.log'
     input_fname = os.path.basename(sys.argv[1]).split('.')
+<<<<<<< Updated upstream
     visualize("{}.{}.pdf".format(input_fname[0], input_fname[1]))
+=======
+    visualize('{}.{}.pdf'.format(input_fname[0], input_fname[1]))
+
+>>>>>>> Stashed changes
