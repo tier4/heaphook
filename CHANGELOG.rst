@@ -2,8 +2,8 @@
 Changelog for package heaphook
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.1.0 (2023-05-23)
+------------------
 * ci: add build-and-test workflow (`#2 <https://github.com/tier4/heaphook/issues/2>`_)
   * add build-and-test workflow
   * Update .github/workflows/build-and-test.yaml
