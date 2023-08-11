@@ -364,6 +364,7 @@ struct mallinfo mallinfo()
   return orig();
 }
 
+#ifdef HAVE_MALLINFO2
 using mallinfo2_type = struct mallinfo2 (*)( void);
 struct mallinfo2 mallinfo2()
 {
@@ -371,6 +372,7 @@ struct mallinfo2 mallinfo2()
   printf("hoge: mallinfo2 called\n");
   return orig();
 }
+#endif
 
 using mallopt_type = int (*)(int, int);
 int mallopt(int param, int value)
