@@ -26,10 +26,25 @@ endif()
 
 add_executable(app src/app.cpp)
 
+include(CheckSymbolExists)
+check_symbol_exists(mallinfo2 malloc.h HAVE_MALLINFO2)
+
 add_library(preloaded_heaptrack SHARED src/preloaded.cpp)
+if(HAVE_MALLINFO2)
+  target_compile_definitions(preloaded_heaptrack
+    PRIVATE
+      HAVE_MALLINFO2
+  )
+endif()
 
 add_library(preloaded_tlsf SHARED src/preloaded_tlsf.cpp)
 target_link_libraries(preloaded_tlsf PRIVATE tlsf::tlsf)
+if(HAVE_MALLINFO2)
+  target_compile_definitions(preloaded_tlsf
+    PRIVATE
+      HAVE_MALLINFO2
+  )
+endif()
 
 install(TARGETS preloaded_heaptrack preloaded_tlsf DESTINATION lib)
 install(TARGETS app DESTINATION bin)
