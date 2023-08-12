@@ -2,8 +2,8 @@
 Changelog for package heaphook
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.1.1 (2023-08-12)
+------------------
 * fix: add workaround to build on ubuntu 20.04 (`#5 <https://github.com/tier4/heaphook/issues/5>`_)
 * Contributors: Daisuke Nishimatsu
 
