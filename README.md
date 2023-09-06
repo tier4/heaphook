@@ -95,3 +95,86 @@ container = ComposableNodeContainer(
 )
 ```
 
+### liboriginal_allocator.so
+```
+$ LD_PRELOAD=liboriginal_allocator.so executable
+```
+This allocator uses the GLIBC memory allocator internally.
+
+## How to add a new memory allocator
+If you want to implement an allocator to replace the GLIBC memory allcator, you can easily do so by using this heaphook library.
+
+The steps you will take are as follows.
+### 1. Create source file
+What you have to implement are
+* Include `heaphook/heaphook.hpp` header file.
+* Implement your own allocator class that inherits the abstract base class `GlobalAllocator` defined in `heaphook/heaphook.hpp`.
+  * This base class has 5 virtual functions: `do_alloc`, `do_dealloc`, `do_alloc_zeroed`, `do_realloc` and `do_get_block_size`.
+  * `do_alloc_zeroed` and `do_realloc` has default implementation, so you don't have to implement them.
+  * For more information on the GlobalAllocagor API, see here.
+* Implement static member function named `get_instance` in `GlobalAllocator`.
+  * The implementation of this static member function is almost a fixed form. It defines its own allocator as a static local variable and returns a reference to its instance.
+  * See the following example for a concrete implementation.
+
+
+The minimum implementation required is as follows.
+```cpp
+#include "heaphook/heaphook.hpp"
+using namespace heaphook;
+
+class MyAllocator : public GlobalAllocator {
+  void* do_alloc(size_t bytes, size_t align) override {
+    ...
+  }
+
+  void do_dealloc(void* ptr) override {
+    ...
+  }
+
+  size_t do_get_block_size(void * ptr) override {
+    ...
+  }
+};
+
+GlobalAllocator &GlobalAllocator::get_instance() {
+  static MyAllocator allocator;
+  return allocator;
+}
+```
+Save the above implementation in src/my_allocator.cpp.
+
+### 2. Edit CMakeLists.txt
+To build the implemented allocator, you must edit CMakeLists.txt.
+You can use build_library cmake function to add build target.
+
+build_library takes a library name as its first argument and a set of required source files as the second and subsequent arguments.
+
+For example, 
+```cmake
+build_library(my_allocator
+  src/my_allocator.cpp)
+```
+
+### 3. Build
+Go to the top directory and execute the following command.
+```shell
+$ colcon build
+```
+If the build is successful, a file named `lib<libname>.so` should be created.
+You can use it as follows.
+```shell
+$ source install/setup.bash
+$ LD_PRELOAD=libmy_allocator.so executable
+```
+
+## heaphook API
+This section describes the `GlobalAllocator`, which is required when creating an allocator.
+
+`GlobalAllocator` has 5 virtual member functions.
+* `do_alloc(size_t size, size_t align)` must allocate a memory area that is larger than size byte and aligned with ALIGN and return its address.
+
+## Trace function
+TODO: 
+
+## Test allocator
+TODO:

@@ -58,6 +58,8 @@ build_library(tlsf_hook
   src/tlsf/tlsf.cpp)
 target_link_libraries(tlsf_hook PRIVATE tlsf::tlsf)
 
+build_library(my_allocator
+  src/my_allocator.cpp)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
