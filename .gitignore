@@ -3,3 +3,4 @@ app
 preloaded.so
 heaplog_parser
 *.log
+*.png
