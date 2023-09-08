@@ -241,4 +241,9 @@ $ misc/heaptrace_analyzer.py heaplog.<pid>.log
 ```
 
 ## Test allocator
-TODO:
+To test the new memory allocator, add the following statement in CMakeLists.txt. `test_library(<target name> <sources>..)` is a cmake function which builds a test program based on Google Test.
+```cmake
+test_library(test_my_allocator
+  src/original_allocator.cpp)
+```
+After describing the above, colcon build will create a test program in build/heaphook/test_my_allocator. The source of this test program is in the file test/test_allocator.cpp, so please refer to it if necessary.
