@@ -56,7 +56,7 @@ class HeaphookAnalyzer:
         # list of XXXInfo (AllocInfo, DeallocInfo, ...)
         self.trace_data = []
         # list of allocated memory size transitions
-        self.allocated_memory_size_history = [0]
+        self.heap_consumption_transitions = [0]
 
         # counter for each method
         self.alloc_num = 0
@@ -147,7 +147,7 @@ class HeaphookAnalyzer:
                     if info.addr not in addr2size: # try get_block_size area that is not allocated
                         self.get_block_size_before_alloc += 1
 
-                self.allocated_memory_size_history.append(allocated_memory_size)
+                self.heap_consumption_transitions.append(allocated_memory_size)
             
         self.alloc_info_list = list(filter(lambda info: isinstance(info, AllocInfo), self.trace_data))
         self.dealloc_info_list = list(filter(lambda info: isinstance(info, DeallocInfo), self.trace_data))
@@ -168,9 +168,9 @@ class HeaphookAnalyzer:
         print(f"the number of realloc before alloc is {self.realloc_before_alloc}")
         print(f"the number of get_block_size before alloc is {self.get_block_size_before_alloc}")
     
-    def plot_allocated_memory_size_history(self, output_file_name):
-        x = list(range(len(self.allocated_memory_size_history)))
-        y = self.allocated_memory_size_history
+    def plot_heap_consumption_transitions(self, output_file_name):
+        x = list(range(len(self.heap_consumption_transitions)))
+        y = self.heap_consumption_transitions
         plt.plot(x, y)
         plt.xlabel("Method index")
         plt.ylabel("Accumulated heap allocation size (bytes)")
@@ -193,14 +193,14 @@ class HeaphookAnalyzer:
 def create_png_file_name(file_name, addtext):
     dirname = os.path.dirname(input_file_name)
     filename = os.path.basename(input_file_name)
-    filebase = os.path.splitext(input_file_name)[0]
-    return dirname + filebase + addtext + ".png"
+    filebase = os.path.splitext(filename)[0]
+    return "./" + dirname + "/" + filebase + addtext + ".png"
 
 if __name__ == '__main__':
     input_file_name = sys.argv[1]
     analyzer = HeaphookAnalyzer(input_file_name)
     analyzer.show_analysis_summary()
-    analyzer.plot_allocated_memory_size_history(create_png_file_name(input_file_name, "_history_of_heap_allocation"))
+    analyzer.plot_heap_consumption_transitions(create_png_file_name(input_file_name, "_heap_consumption_transitions"))
     analyzer.plot_method_performance(analyzer.alloc_info_list, create_png_file_name(input_file_name, "_alloc_performance"))
     analyzer.plot_method_performance(analyzer.dealloc_info_list, create_png_file_name(input_file_name, "_dealloc_performance"))
     analyzer.plot_method_performance(analyzer.alloc_zeroed_info_list, create_png_file_name(input_file_name, "_alloc_zeroed_performance"))

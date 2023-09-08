@@ -4,7 +4,7 @@ namespace heaphook {
 
 HeapTracer::HeapTracer() {
   write_to_stderr("\n😺 HeapTracer 😺\n\n");
-  format(log_file_name_, "./", getpid(), ".log");
+  format(log_file_name_, "./heaplog_", getpid(), ".log");
   log_file_fd_ = open(log_file_name_, O_WRONLY|O_CREAT|O_TRUNC, 0666);
   if (log_file_fd_ == -1) {
     write(STDERR_FILENO, "\n[ heaphook ] ERROR: failed to open log file.\n", 47);

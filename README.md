@@ -181,6 +181,8 @@ This function allocates a memory area that is larger than `size` byte and aligne
   * 1, which means there are no alignment constraints.
   * a power of 2 and multiple of `sizeof(void *)`, such as 8, 16, 32, ..., 4096, ...
 
+If memory allocation fails due to various factors, `nullptr` should be returned.
+
 This function hooks the GLIBC allocation functions `malloc`, `posix_memalign`, `memalign`, `aligned_alloc`, `valloc` and `pvalloc`.
 
 ### do_dealloc
@@ -200,6 +202,8 @@ void *GlobalAllocator::do_alloc_zeroed(size_t size);
 This function allocates a memory area that is larger than `size` byte. The memory is set to zero. The following conditions can be assumed,
 * `size` > 0
 
+If memory allocation fails due to various factors, `nullptr` should be returned.
+
 This function hooks the `calloc` function in GLIBC.
 
 A default implementation is provided that calls `do_alloc` and initializes the allocated memory area with zeros using `memset`.
@@ -212,6 +216,8 @@ This function changes the size of the memory block pointed to by `ptr` to `new_s
 * `ptr` is the value previously returned from these allocation functions. (If not, the program may be killed.)
 * `ptr` != `nullptr`
 * `new_size` > 0
+
+If memory allocation fails due to various factors, `nullptr` should be returned.
 
 This function hooks the `realloc` function in GLIBC.
 
@@ -228,7 +234,17 @@ This function returns the size of the memory block pointed to by `ptr`. The foll
 This function is called internally when calling the GLIBC's `malloc_usable_size`.
 
 ## Trace function
-TODO: 
+heaphook has a trace function for debugging the allocator and analyzing its performance.
+
+In the CMakeList.txt file, after declaring a new allocator building rule with `build_library`, you can specify `target_compile_options(<libname> PRIVATE "-DTRACE")` to build library that traces the allocator's behavior.
+```cmake
+build_library(my_allocator ...)
+target_compile_options(my_allocator PRIVATE "-DTRACE")
+```
+If configured in this way, the library will generate a log file named `heaplog.<pid>.log` in the current directory. You can visualize heap consumption transitions and performance of each GlobalAllocator member functions in png format based on the generated log file.
+```bash
+$ misc/heaptrace_analyzer.py heaplog.<pid>.log 
+```
 
 ## Test allocator
 TODO:
