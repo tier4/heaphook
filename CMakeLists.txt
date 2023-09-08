@@ -50,17 +50,6 @@ function(test_library LIB_NAME_AND_SOURCES) # === test_library ===
     DESTINATION lib)
 endfunction() # === test_library ===
 
-build_library(original_allocator
-  src/original_allocator.cpp)
-target_compile_options(original_allocator PRIVATE "-DTRACE")
-
-build_library(tlsf_hook
-  src/tlsf/tlsf.cpp)
-target_link_libraries(tlsf_hook PRIVATE tlsf::tlsf)
-
-build_library(my_allocator
-  src/my_allocator.cpp)
-
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
@@ -86,9 +75,9 @@ if(BUILD_TESTING)
   test_library(test_original_allocator
     src/original_allocator.cpp)
 
-  test_library(test_tlsf_hook
+  test_library(test_preloaded_tlsf
     src/tlsf/tlsf.cpp)
-  target_link_libraries(test_tlsf_hook tlsf::tlsf)
+  target_link_libraries(test_preloaded_tlsf tlsf::tlsf)
   # =================================
 endif()
 
@@ -97,7 +86,9 @@ add_executable(app src/app.cpp)
 include(CheckSymbolExists)
 check_symbol_exists(mallinfo2 malloc.h HAVE_MALLINFO2)
 
-add_library(preloaded_heaptrack SHARED src/preloaded.cpp)
+# build preloaded_heaptrack.so
+build_library(preloaded_heaptrack src/original_allocator.cpp)
+target_compile_options(preloaded_heaptrack PRIVATE "-DTRACE")
 if(HAVE_MALLINFO2)
   target_compile_definitions(preloaded_heaptrack
     PRIVATE
@@ -105,7 +96,8 @@ if(HAVE_MALLINFO2)
   )
 endif()
 
-add_library(preloaded_tlsf SHARED src/preloaded_tlsf.cpp)
+# build libpreloaded_tlsf.so
+build_library(preloaded_tlsf src/tlsf/tlsf.cpp)
 target_link_libraries(preloaded_tlsf PRIVATE tlsf::tlsf)
 if(HAVE_MALLINFO2)
   target_compile_definitions(preloaded_tlsf
@@ -113,6 +105,9 @@ if(HAVE_MALLINFO2)
       HAVE_MALLINFO2
   )
 endif()
+
+# # This is a demonstration.
+# build_library(my_allocator src/my_allocator.cpp)
 
 install(TARGETS preloaded_heaptrack preloaded_tlsf DESTINATION lib)
 install(TARGETS app DESTINATION bin)

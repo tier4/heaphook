@@ -16,7 +16,7 @@ $ source install/setup.bash
 
 ## How to use
 For now, We provide two kinds of the heaphook libraries.
-- `libpreload_heaptrack.so`: Records all the heap allocation/deallocation function calls and generate a log file for visualizing the history of heap consumption.
+- `libpreloaded_heaptrack.so`: Records all the heap allocation/deallocation function calls and generate a log file for visualizing the history of heap consumption.
 - `libpreloaded_tlsf.so`: Replaces all the heap allocation/deallocation with TLSF (Tow-Level Segregated Fit) memory allocator.
 
 A typical use case is to utilize `libpreloaded_heaptrack` to grasp the transition and maximum value of heap consumtion of the target process
@@ -94,12 +94,6 @@ container = ComposableNodeContainer(
   },
 )
 ```
-
-### liboriginal_allocator.so
-```
-$ LD_PRELOAD=liboriginal_allocator.so executable
-```
-This allocator uses the GLIBC memory allocator internally.
 
 ## How to add a new memory allocator
 If you want to implement an allocator to replace the GLIBC memory allcator, you can easily do so by using this heaphook library.
