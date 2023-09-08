@@ -172,12 +172,13 @@ class HeaphookAnalyzer:
         x = list(range(len(self.heap_consumption_transitions)))
         y = self.heap_consumption_transitions
         plt.plot(x, y)
+        plt.title("Heap Consumption Transitions")
         plt.xlabel("Method index")
         plt.ylabel("Accumulated heap allocation size (bytes)")
         plt.savefig(output_file_name, dpi=300)
         plt.close()
 
-    def plot_method_performance(self, info_list, output_file_name):
+    def plot_method_performance(self, info_list, output_file_name, method_name):
         x = list(range(len(info_list)))
         y = [info.time for info in info_list]
         plt.plot(x, y, 'o', markersize=1)
@@ -185,6 +186,7 @@ class HeaphookAnalyzer:
             average = sum(y) / len(y)
             plt.axhline(y=average, linestyle='--', label=f"average = {average:.2f}", color="orange")
             plt.legend()
+        plt.title(f"{method_name} Performance")
         plt.xlabel("Method index")
         plt.ylabel("Processing time [ns]")
         plt.savefig(output_file_name, dpi=300)
@@ -201,8 +203,8 @@ if __name__ == '__main__':
     analyzer = HeaphookAnalyzer(input_file_name)
     analyzer.show_analysis_summary()
     analyzer.plot_heap_consumption_transitions(create_png_file_name(input_file_name, "_heap_consumption_transitions"))
-    analyzer.plot_method_performance(analyzer.alloc_info_list, create_png_file_name(input_file_name, "_alloc_performance"))
-    analyzer.plot_method_performance(analyzer.dealloc_info_list, create_png_file_name(input_file_name, "_dealloc_performance"))
-    analyzer.plot_method_performance(analyzer.alloc_zeroed_info_list, create_png_file_name(input_file_name, "_alloc_zeroed_performance"))
-    analyzer.plot_method_performance(analyzer.realloc_info_list, create_png_file_name(input_file_name, "_realloc_performance"))
-    analyzer.plot_method_performance(analyzer.get_block_size_info_list, create_png_file_name(input_file_name, "_get_block_size_performance"))
+    analyzer.plot_method_performance(analyzer.alloc_info_list, create_png_file_name(input_file_name, "_alloc_performance"), "alloc")
+    analyzer.plot_method_performance(analyzer.dealloc_info_list, create_png_file_name(input_file_name, "_dealloc_performance"), "dealloc")
+    analyzer.plot_method_performance(analyzer.alloc_zeroed_info_list, create_png_file_name(input_file_name, "_alloc_zeroed_performance"), "alloc_zeroed")
+    analyzer.plot_method_performance(analyzer.realloc_info_list, create_png_file_name(input_file_name, "_realloc_performance"), "realloc")
+    analyzer.plot_method_performance(analyzer.get_block_size_info_list, create_png_file_name(input_file_name, "_get_block_size_performance"), "get_block_size")
