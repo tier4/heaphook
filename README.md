@@ -123,7 +123,7 @@ The minimum implementation required is as follows.
 using namespace heaphook;
 
 class MyAllocator : public GlobalAllocator {
-  void* do_alloc(size_t bytes, size_t align) override {
+  void* do_alloc(size_t size, size_t align) override {
     ...
   }
 
@@ -168,10 +168,64 @@ $ LD_PRELOAD=libmy_allocator.so executable
 ```
 
 ## heaphook API
-This section describes the `GlobalAllocator`, which is required when creating an allocator.
+This section describes the `GlobalAllocator` class, which is required when creating an allocator.
 
-`GlobalAllocator` has 5 virtual member functions.
-* `do_alloc(size_t size, size_t align)` must allocate a memory area that is larger than size byte and aligned with ALIGN and return its address.
+The `GlobalAllocator` class has 5 virtual member functions.
+### do_alloc
+```cpp
+void *GlobalAllocator::do_alloc(size_t size, size_t align);
+``` 
+This function allocates a memory area that is larger than `size` byte and aligned with `align` and returns its address. When implementing this function, the following conditions can be assumed. (heaphook will filter out those that do not meet these conditions.)
+* `size` > 0
+* `align` is either
+  * 1, which means there are no alignment constraints.
+  * a power of 2 and multiple of `sizeof(void *)`, such as 8, 16, 32, ..., 4096, ...
+
+This function hooks the GLIBC allocation functions `malloc`, `posix_memalign`, `memalign`, `aligned_alloc`, `valloc` and `pvalloc`.
+
+### do_dealloc
+```cpp
+void GlobalAllocator::do_dealloc(void *ptr);
+```
+This function deallocates a memory area pointed to by ptr, which must have been allocated by other allocation functions `do_alloc`, `do_alloc_zeroed` or `do_realloc`. The following conditions can be assumed,
+* `ptr` is the value previously returned from these allocation functions. (If not, the program may be killed.)
+* `ptr` != `nullptr`
+
+This function hooks the `free` function in GLIBC.
+
+### do_alloc_zeroed
+```cpp
+void *GlobalAllocator::do_alloc_zeroed(size_t size);
+``` 
+This function allocates a memory area that is larger than `size` byte. The memory is set to zero. The following conditions can be assumed,
+* `size` > 0
+
+This function hooks the `calloc` function in GLIBC.
+
+A default implementation is provided that calls `do_alloc` and initializes the allocated memory area with zeros using `memset`.
+
+### do_realloc
+```cpp
+void *GlobalAllocator::do_realloc(void *ptr, size_t new_size);
+``` 
+This function changes the size of the memory block pointed to by `ptr` to `new_size` bytes and return a pointer to the new memory area. The contents of the memory area must remain unchanged. When expanging the memory, the added memory does not need to be initialized. The following conditions can be assumed,
+* `ptr` is the value previously returned from these allocation functions. (If not, the program may be killed.)
+* `ptr` != `nullptr`
+* `new_size` > 0
+
+This function hooks the `realloc` function in GLIBC.
+
+A default implementation is provided that performs `do_alloc(new_size, 1)`, copies contents, and then deallocates the original pointer using `dealloc(ptr)`.
+
+### do_get_block_size
+```cpp
+void *GlobalAllocator::do_get_block_size(void *ptr);
+``` 
+This function returns the size of the memory block pointed to by `ptr`. The following conditions can be assumed,
+* `ptr` is the value previously returned from these allocation functions. (If not, the program may be killed.)
+* `ptr` != `nullptr`
+
+This function is called internally when calling the GLIBC's `malloc_usable_size`.
 
 ## Trace function
 TODO: 
