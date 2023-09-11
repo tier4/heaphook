@@ -101,49 +101,69 @@ TEST(calloc_test, invalid_args_test) {
   test(0x100000000000000, 0x100000000000000); // overflow
 }
 
-// TEST(heaphook, realloc) {
-//   auto test = [](size_t old_size, size_t new_size, bool is_nullptr, int expected_errno) {
-//     if (is_nullptr) {
-//       errno = 0;
-//       EXPECT_EQ(glibc_realloc(malloc(old_size), new_size), nullptr);
-//       EXPECT_EQ(errno, expected_errno);
-//       errno = 0;
-//       EXPECT_EQ(realloc(malloc(old_size), new_size), nullptr);
-//       EXPECT_EQ(errno, expected_errno);
-//     } else {
-//       EXPECT_NE(glibc_realloc(malloc(old_size), new_size), nullptr);
-//       EXPECT_NE(realloc(malloc(old_size), new_size), nullptr);
-//     }
-//   };
+TEST(realloc_test, enlarge_test) {
+  auto test = [](size_t old_size, size_t new_size) {
+    char *ptr = reinterpret_cast<char *>(malloc(old_size));
+    EXPECT_NE(ptr, nullptr);
+    memset(ptr, 'A', old_size);
+    ptr = reinterpret_cast<char *>(realloc(ptr, new_size));
+    for (size_t i = 0; i < old_size; i++) {
+      EXPECT_EQ(ptr[i], 'A');
+    }
+    EXPECT_LE(new_size, malloc_usable_size(ptr));
+    memset(ptr, 'B', new_size);
+    free(ptr);
+  };
   
-//   test(0, 0, true, 0);
-//   test(0x20, 0, true, 0); // invoke free
-//   test(0, 0x20, false, 0);
-//   test(0x20, 0x20, false, 0);
-//   test(0x20, 0x10000000000, true, ENOMEM);
-// }
+  test(0, 1);
+  test(1, 123);
+  test(123, getpagesize());
+}
 
-// TEST(heaphook, realloc2) {
-//   // the case where nullptr is passed
-//   auto test = [](size_t new_size, bool is_nullptr, int expected_errno) {
-//     if (is_nullptr) {
-//       errno = 0;
-//       EXPECT_EQ(glibc_realloc(nullptr, new_size), nullptr);
-//       EXPECT_EQ(errno, expected_errno);
-//       errno = 0;
-//       EXPECT_EQ(realloc(nullptr, new_size), nullptr);
-//       EXPECT_EQ(errno, expected_errno);
-//     } else {
-//       EXPECT_NE(glibc_realloc(nullptr, new_size), nullptr);
-//       EXPECT_NE(realloc(nullptr, new_size), nullptr);
-//     }
-//   };
+TEST(realloc_test, shrink_test) {
+  auto test = [](size_t old_size, size_t new_size) {
+    char *ptr = reinterpret_cast<char *>(malloc(old_size));
+    EXPECT_NE(ptr, nullptr);
+    memset(ptr, 'A', old_size);
+    ptr = reinterpret_cast<char *>(realloc(ptr, new_size));
+    for (size_t i = 0; i < new_size; i++) {
+      EXPECT_EQ(ptr[i], 'A');
+    }
+    EXPECT_LE(new_size, malloc_usable_size(ptr));
+    memset(ptr, 'B', new_size);
+    free(ptr);
+  };
+  
+  test(123, 1);
+  test(getpagesize(), 123);
+  test(200, 100);
+}
 
-//   // if nullptr is passed then realloc is equivalent to malloc(new_size)
-//   test(0, false, 0);
-//   test(0x20, false, 0);
-//   test(0xdeadbeefcafeba, true, ENOMEM);
-// }
+TEST(realloc_test, nullptr_test) {
+  auto test = [](size_t size) {
+    void *ptr = realloc(nullptr, size); // = malloc(ptr)
+    EXPECT_NE(nullptr, ptr);
+    EXPECT_LE(size, malloc_usable_size(ptr));
+    memset(ptr, 'A', size);
+    free(ptr);
+  };
+
+  test(0);
+  test(1);
+  test(0x20);
+  test(getpagesize());
+
+  errno = 0;
+  void *ptr = realloc(nullptr, 0x100000000000000u);
+  EXPECT_EQ(nullptr, ptr);
+  EXPECT_EQ(errno, ENOMEM);
+}
+
+TEST(realloc_test, zero_test) {
+  void *ptr = malloc(100);
+  ptr = realloc(ptr, 0); // = free(ptr)
+  EXPECT_EQ(nullptr, ptr);
+}
 
 TEST(posix_memalign_test, valid_args_test) {
   auto test = [](size_t alignment, size_t size) {
