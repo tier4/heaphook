@@ -62,31 +62,42 @@ TEST(malloc_usable_size_test, nullptr_test) {
   ASSERT_EQ(0u, malloc_usable_size(nullptr));
 }
 
-// TEST(heaphook, calloc) {
-//   // test if the timing of returning nullptr is the same.
-//   auto test = [](size_t num, size_t size, bool is_nullptr, int expected_errno) {
-//     if (is_nullptr) {
-//       errno = 0;
-//       EXPECT_EQ(glibc_calloc(num, size), nullptr);
-//       EXPECT_EQ(errno, expected_errno);
-//       errno = 0;
-//       EXPECT_EQ(calloc(num, size), nullptr);
-//       EXPECT_EQ(errno, expected_errno);
-//     } else {
-//       EXPECT_NE(glibc_calloc(num, size), nullptr);
-//       EXPECT_NE(calloc(num, size), nullptr);
-//     }
-//   };
+TEST(calloc_test, valid_args_test) {
+  auto test = [](size_t num, size_t size) {
+    char *ptr = reinterpret_cast<char *>(calloc(num, size));
+    EXPECT_NE(nullptr, ptr);
+    EXPECT_LE(num * size, malloc_usable_size(ptr));
+    for (size_t idx = 0; idx < num * size; idx++) {
+      EXPECT_EQ(ptr[idx], '\0');
+    }
+    memset(ptr, 'A', num * size);
+    free(ptr);
+  };
   
-//   // if num * size == 0 then
-//   // calloc allocates the minimum-sized chunk, similar to malloc.
-//   test(0, 0, false, 0);
-//   test(0x10, 0, false, 0);
-//   test(0, 0x10, false, 0);
-//   test(0x10, 0x10, false, 0);
-//   test(0xdeadbeef, 0xcafebabe, true, ENOMEM); // allocation failed due to size being too large
-//   test(SIZE_MAX, SIZE_MAX, true, ENOMEM); // overflow
-// }
+  test(1, 1);
+  test(1, 123);
+  test(1, getpagesize());
+
+  test(121, 1);
+  test(121, 123);
+  test(121, getpagesize());
+  
+  test(0, 0);
+  test(0x10, 0);
+  test(0, 0x10);
+  test(0x10, 0x10);
+}
+
+TEST(calloc_test, invalid_args_test) {
+  auto test = [](size_t num, size_t size) {
+    errno = 0;
+    EXPECT_EQ(calloc(num, size), nullptr);
+    EXPECT_EQ(errno, ENOMEM);
+  };
+
+  test(0xdeadbeef, 0xcafebabe);
+  test(0x100000000000000, 0x100000000000000); // overflow
+}
 
 // TEST(heaphook, realloc) {
 //   auto test = [](size_t old_size, size_t new_size, bool is_nullptr, int expected_errno) {
