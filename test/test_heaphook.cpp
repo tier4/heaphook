@@ -143,37 +143,55 @@ TEST(calloc_test, invalid_args_test) {
 //   test(0xdeadbeefcafeba, true, ENOMEM);
 // }
 
-// TEST(heaphook, posix_memalign) {
-//   auto test = [](size_t size, size_t alignment, bool is_nullptr, int retval) {
-//     void *glibc_ptr = nullptr;
-//     void *heaphook_ptr = nullptr;
-//     int glibc_retval, heaphook_retval;
-//     glibc_retval = glibc_posix_memalign(&glibc_ptr, alignment, size);
-//     heaphook_retval = posix_memalign(&heaphook_ptr, alignment, size);
-//     if (is_nullptr) {
-//       EXPECT_EQ(glibc_ptr, nullptr);
-//       EXPECT_EQ(heaphook_ptr, nullptr);
-//     } else {
-//       EXPECT_NE(glibc_ptr, nullptr);
-//       EXPECT_NE(heaphook_ptr, nullptr);
-//     }
-//     EXPECT_EQ(glibc_retval, retval);
-//     EXPECT_EQ(heaphook_retval, retval);
-//   };
+TEST(posix_memalign_test, valid_args_test) {
+  auto test = [](size_t alignment, size_t size) {
+    void *ptr = nullptr;
+    int retval = posix_memalign(&ptr, alignment, size);
+    size_t addr = reinterpret_cast<size_t>(ptr);
+    EXPECT_NE(ptr, nullptr);
+    EXPECT_EQ(addr % alignment, 0u);
+    EXPECT_EQ(retval, 0);
+    EXPECT_LE(size, malloc_usable_size(ptr));
+    memset(ptr, 'A', size);
+    free(ptr);
+  };
 
-//   // alignment is valid
-//   test(0, 8, false, 0);
-//   test(1, 8, false, 0);
-//   test(0x20, 8, false, 0);
-//   test(0x1'000'000'000'000, 8, true, ENOMEM); // too large size
-//   // alignment is invalid
-//   test(0x20, 0, true, EINVAL);
-//   test(0x20, 1, true, EINVAL);
-//   test(0x20, 3, true, EINVAL);
-//   test(0x20, 24, true, EINVAL);
-//   test(0x1'000'000'000'000, 1, true, EINVAL); // too large size
-// }
+  // alignment is valid
+  test(sizeof(void *), 0);
+  test(sizeof(void *), 1);
+  test(sizeof(void *), 123);
+  test(sizeof(void *), getpagesize());
+  test(getpagesize(), 0);
+  test(getpagesize(), 1);
+  test(getpagesize(), 123);
+  test(getpagesize(), getpagesize());
+}
 
+TEST(posix_memalign_test, invalid_size_test) {
+  auto test = [](size_t alignment, size_t size) {
+    void *ptr = nullptr;
+    int retval = posix_memalign(&ptr, alignment, size);
+    EXPECT_EQ(ptr, nullptr);
+    EXPECT_EQ(retval, ENOMEM);
+  };
+
+  test(0x1000000000000, 0x1000000000000);
+}
+
+TEST(posix_memalign_test, invalid_alignment_test) {
+  auto test = [](size_t alignment, size_t size) {
+    void *ptr = nullptr;
+    int retval = posix_memalign(&ptr, alignment, size);
+    EXPECT_EQ(ptr, nullptr);
+    EXPECT_EQ(retval, EINVAL);
+  };
+
+  test(0, 100);
+  test(1, 100);
+  test(2, 100);
+  test(7, 100);
+  test(24, 100);
+}
 
 // //========================================//
 // //                memalign                //
