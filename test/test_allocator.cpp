@@ -24,11 +24,9 @@ TEST(alloc_test, valid_size_test) {
     GlobalAllocator::get_instance().dealloc(ptr);
   };
 
-  test(1);
-  test(15);
-  test(123);
-  test(getpagesize());
-  test(0x12345);
+  for (auto size: { 1, 15, 123, getpagesize(), 0x12345 }) {
+    test(size);
+  }
 }
 
 TEST(alloc_test, invalid_size_test) {
@@ -54,16 +52,11 @@ TEST(alloc_test, alignment_test) {
     }
     GlobalAllocator::get_instance().dealloc(ptr);
   };
-
-  test(1, sizeof(void *));
-  test(15, sizeof(void *));
-  test(123, sizeof(void *));
-  test(getpagesize(), sizeof(void *));
-
-  test(1, getpagesize());
-  test(15, getpagesize());
-  test(123, getpagesize());
-  test(getpagesize(), getpagesize());
+  
+  for (auto size: { 1, 15, 123, getpagesize(), 0x12345 }) {
+    test(size, sizeof(void *));
+    test(size, getpagesize());
+  }
 }
 
 TEST(get_block_size_test, write_test) {
@@ -78,41 +71,37 @@ TEST(get_block_size_test, write_test) {
     GlobalAllocator::get_instance().dealloc(ptr);
   };
 
-  test(1, 1);
-  test(15, 1);
-  test(123, 1);
-  test(getpagesize(), 1);
-
-  test(1, 64);
-  test(15, 64);
-  test(123, 64);
-  test(getpagesize(), 64);
-}
-
-// is alloc_zeroed properly initialized with 0 ?
-TEST(AllocZeroedTest, ZeroedTest) {
-  const size_t kSizeMax = 0x100;
-  for (size_t size = 1; size < kSizeMax; size++) {
-    char *p = reinterpret_cast<char *>(GlobalAllocator::get_instance().alloc_zeroed(size));
-    EXPECT_NE(nullptr, p);
-    for (size_t idx = 0; idx < size; idx++) EXPECT_EQ(0, p[idx]);
-  }
-
-  for (size_t size = 0x100; size < 0x10000; size <<= 1) {
-    char *p = reinterpret_cast<char *>(GlobalAllocator::get_instance().alloc_zeroed(size));
-    EXPECT_NE(nullptr, p);
-    for (size_t idx = 0; idx < size; idx++) EXPECT_EQ(0, p[idx]);
+  for (auto size: { 1, 15, 123, getpagesize(), 0x12345 }) {
+    test(size, 1);
+    test(size, 64);
   }
 }
 
-TEST(GetBlockSizeTest, SizeTest) {
-  const size_t kSizeMax = 2 * 4096;
-  for (size_t size = 1; size < kSizeMax; size++) {
-    void *p = GlobalAllocator::get_instance().alloc(size);
-    EXPECT_NE(nullptr, p);
-    EXPECT_LE(size, GlobalAllocator::get_instance().get_block_size(p));
-    GlobalAllocator::get_instance().dealloc(p);
+TEST(alloc_zeroed_test, valid_size_test) {
+  auto test = [](size_t size) {
+    char *ptr = reinterpret_cast<char *>(GlobalAllocator::get_instance().alloc_zeroed(size));
+    EXPECT_TRUE(ptr != nullptr);
+    size_t block_size = GlobalAllocator::get_instance().get_block_size(ptr);
+    EXPECT_TRUE(size <= block_size);
+    for (size_t i = 0; i < size; i++) {
+      EXPECT_TRUE(ptr[i] == 0);
+    }
+    GlobalAllocator::get_instance().dealloc(ptr);
+  };
+
+  for (auto size: { 1, 15, 123, getpagesize(), 0x12345 }) {
+    test(size);
   }
+}
+
+TEST(alloc_zeroed_test, invalid_size_test) {
+  auto test = [](size_t size) {
+    void *ptr = GlobalAllocator::get_instance().alloc_zeroed(size);
+    EXPECT_TRUE(ptr == nullptr);
+  };
+
+  test(0x1000000000000); // 256 TB
+  test(SIZE_MAX);
 }
 
 // TODO: dealloc test
