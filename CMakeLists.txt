@@ -63,6 +63,10 @@ if(BUILD_TESTING)
 
   # ========== google test ==========
   # heaphook itself test
+  ament_add_gtest(test_glibc test/test_heaphook.cpp)
+  target_include_directories(test_glibc
+    PRIVATE ${PROJECT_SOURCE_DIR}/include)
+  
   ament_add_gtest(test_heaphook test/test_heaphook.cpp src/original_allocator ${HEAPHOOK_SOURCES})
   target_include_directories(test_heaphook
     PRIVATE ${PROJECT_SOURCE_DIR}/include)
