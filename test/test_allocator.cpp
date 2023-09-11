@@ -104,6 +104,84 @@ TEST(alloc_zeroed_test, invalid_size_test) {
   test(SIZE_MAX);
 }
 
+TEST(realloc_test, alloc_to_realloc_test) {
+  auto test = [](size_t old_size, size_t new_size) {
+    char *ptr = reinterpret_cast<char *>(GlobalAllocator::get_instance().alloc(old_size));
+    EXPECT_TRUE(ptr != nullptr);
+    for (size_t i = 0; i < old_size; i++) {
+      ptr[i] = 'A';
+    }
+    ptr = reinterpret_cast<char *>(GlobalAllocator::get_instance().realloc(ptr, new_size));
+    size_t block_size = GlobalAllocator::get_instance().get_block_size(ptr);
+    EXPECT_TRUE(new_size <= block_size);
+    for (size_t i = 0; i < std::min(old_size, new_size); i++) {
+      EXPECT_TRUE(ptr[i] == 'A');
+    }
+    GlobalAllocator::get_instance().dealloc(ptr);
+  };
+
+  test(1, 15);
+  test(15, 123);
+  test(123, getpagesize());
+  test(15, 1);
+  test(123, 15);
+  test(getpagesize(), 123);
+}
+
+TEST(realloc_test, alloc_zeroed_to_realloc_test) {
+  auto test = [](size_t old_size, size_t new_size) {
+    char *ptr = reinterpret_cast<char *>(GlobalAllocator::get_instance().alloc_zeroed(old_size));
+    EXPECT_TRUE(ptr != nullptr);
+    ptr = reinterpret_cast<char *>(GlobalAllocator::get_instance().realloc(ptr, new_size));
+    size_t block_size = GlobalAllocator::get_instance().get_block_size(ptr);
+    EXPECT_TRUE(new_size <= block_size);
+    for (size_t i = 0; i < std::min(old_size, new_size); i++) {
+      EXPECT_TRUE(ptr[i] == '\0');
+    }
+    GlobalAllocator::get_instance().dealloc(ptr);
+  };
+
+  test(1, 15);
+  test(15, 123);
+  test(123, getpagesize());
+  test(15, 1);
+  test(123, 15);
+  test(getpagesize(), 123);
+}
+
+TEST(realloc_test, realloc_to_realloc_test) {
+  auto test = [](size_t old_size, size_t new_size) {
+    char *ptr = reinterpret_cast<char *>(GlobalAllocator::get_instance().alloc(10));
+    EXPECT_TRUE(ptr != nullptr);
+    ptr = reinterpret_cast<char *>(GlobalAllocator::get_instance().realloc(ptr, old_size));
+    EXPECT_TRUE(ptr != nullptr);
+    for (size_t i = 0; i < old_size; i++) {
+      ptr[i] = 'A';
+    }
+    ptr = reinterpret_cast<char *>(GlobalAllocator::get_instance().realloc(ptr, new_size));
+    size_t block_size = GlobalAllocator::get_instance().get_block_size(ptr);
+    EXPECT_TRUE(new_size <= block_size);
+    for (size_t i = 0; i < std::min(old_size, new_size); i++) {
+      EXPECT_TRUE(ptr[i] == 'A');
+    }
+    GlobalAllocator::get_instance().dealloc(ptr);
+  };
+
+  test(1, 15);
+  test(15, 123);
+  test(123, getpagesize());
+  test(15, 1);
+  test(123, 15);
+  test(getpagesize(), 123);
+}
+
+TEST(realloc_test, too_big_size_test) {
+  void *ptr = GlobalAllocator::get_instance().alloc(100, 64);
+  EXPECT_TRUE(ptr != nullptr);
+  ptr = GlobalAllocator::get_instance().realloc(ptr, 0x1000000000000);
+  EXPECT_TRUE(ptr == nullptr);
+}
+
 // TODO: dealloc test
 
 TEST(MultiThreadTest, Alloc) {
