@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <gtest/gtest.h>
 #include <thread>
+#include <random>
+#include <set>
 
 #include "heaphook/heaphook.hpp"
 #include "heaphook/utils.hpp"
@@ -182,29 +184,69 @@ TEST(realloc_test, too_big_size_test) {
   EXPECT_TRUE(ptr == nullptr);
 }
 
-// TODO: dealloc test
+TEST(integration_test, allocation_test) {
+  const size_t NLOOP = 1000;
+  auto intervals = std::set<std::pair<size_t, size_t>>();
+  
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<size_t> distribution(1, 2 * getpagesize());
 
-TEST(MultiThreadTest, Alloc) {
-  const size_t kAllocateTimes = 10000;
-  const size_t kAllocSize = 0x20;
+  auto insert = [&](size_t addr, size_t size) {
+    auto it = intervals.lower_bound(std::make_pair(addr, addr + size));
+    if (it != intervals.end()) {
+      EXPECT_TRUE(addr + size <= it->first);
+    }
+    if (it != intervals.begin()) {
+      it--;
+      EXPECT_TRUE(it->second <= addr + size);
+    }
+    intervals.insert(std::make_pair(addr, addr + size));
+  };
 
+  auto ptrs = std::vector<void *>();
+
+  for (size_t i = 0; i < NLOOP; i++) {
+    size_t size = distribution(gen);
+    void *ptr = GlobalAllocator::get_instance().alloc(size);
+    ptrs.push_back(ptr);
+    size_t addr = reinterpret_cast<size_t>(ptr);
+    insert(addr, size);
+  }
+
+  for (auto ptr: ptrs) {
+    GlobalAllocator::get_instance().dealloc(ptr);
+    size_t addr = reinterpret_cast<size_t>(ptr);
+    auto it = intervals.lower_bound(std::make_pair(addr, 0));
+    EXPECT_TRUE(it != intervals.end());
+    intervals.erase(*it);
+  }
+}
+
+TEST(integration_test, multi_thread_test) {
+  const size_t ALLOCATION_COUNT = 10000;
+  
   auto thread_func = [](int **alloc_ptrs, int thread_id) {
-    for (size_t i = 0; i < kAllocateTimes; i++) {
-      auto ptr = malloc(kAllocSize);
-      ASSERT_NE(ptr, nullptr);
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<size_t> distribution(sizeof(int), 2 * getpagesize());
+
+    for (size_t i = 0; i < ALLOCATION_COUNT; i++) {
+      auto ptr = malloc(distribution(gen));
+      EXPECT_TRUE(ptr != nullptr);
       alloc_ptrs[i] = reinterpret_cast<int *>(ptr);
       *alloc_ptrs[i] = thread_id;
     }
   };
 
-  int *alloc_ptrs[2][kAllocateTimes];
+  int *alloc_ptrs[2][ALLOCATION_COUNT];
   std::thread t0(thread_func, alloc_ptrs[0], 0);
   std::thread t1(thread_func, alloc_ptrs[1], 1);
 
   t0.join();
   t1.join();
 
-  for (size_t i = 0; i < kAllocateTimes; i++) {
+  for (size_t i = 0; i < ALLOCATION_COUNT; i++) {
     ASSERT_EQ(*alloc_ptrs[0][i], 0);
     ASSERT_EQ(*alloc_ptrs[1][i], 1);
   }
