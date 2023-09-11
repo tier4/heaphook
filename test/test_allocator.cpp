@@ -12,39 +12,81 @@
 
 using namespace heaphook;
 
-TEST(AllocTest, SizeTest) {
-  const size_t kSizeMax = 2 * 4096;
-  for (size_t size = 1; size < kSizeMax; size++) {
-    char *p = (char *) GlobalAllocator::get_instance().alloc(size);
-    EXPECT_NE(nullptr, p);
-    for (size_t idx = 0; idx < size; idx++) p[idx] = 'A';
-  }
+TEST(alloc_test, valid_size_test) {
+  auto test = [](size_t size) {
+    char *ptr = reinterpret_cast<char *>(GlobalAllocator::get_instance().alloc(size));
+    EXPECT_TRUE(ptr != nullptr);
+    size_t block_size = GlobalAllocator::get_instance().get_block_size(ptr);
+    EXPECT_TRUE(size <= block_size);
+    for (size_t i = 0; i < size; i++) {
+      ptr[i] = 'A';
+    }
+    GlobalAllocator::get_instance().dealloc(ptr);
+  };
 
-  // fail
-  void *p = GlobalAllocator::get_instance().alloc(0xffffffffffffffff);
-  EXPECT_EQ(p, nullptr);
+  test(1);
+  test(15);
+  test(123);
+  test(getpagesize());
+  test(0x12345);
 }
 
-TEST(AllocTest, AlignTest) {
-  void *p;
-  size_t pval;
-  size_t align = sizeof(void *);
-  for (int i = 0; i < 12; i++, align <<= 1) {
-    p = GlobalAllocator::get_instance().alloc(0x20, align);
-    pval = reinterpret_cast<size_t>(p);
-    EXPECT_NE(p, nullptr);
-    EXPECT_EQ(pval % align, 0ull);
-    GlobalAllocator::get_instance().dealloc(p);
-  }
+TEST(alloc_test, invalid_size_test) {
+  auto test = [](size_t size) {
+    void *ptr = GlobalAllocator::get_instance().alloc(size);
+    EXPECT_TRUE(ptr == nullptr);
+  };
 
-  align = 0x100;
-  for (auto size: { 1,3, 7, 9, 15, 0xff, 0x102, 0x999 }) {
-    p = GlobalAllocator::get_instance().alloc(size, align);
-    pval = reinterpret_cast<size_t>(p);
-    EXPECT_NE(p, nullptr);
-    EXPECT_EQ(pval % align, 0ull);
-    GlobalAllocator::get_instance().dealloc(p);
-  }
+  test(0x1000000000000); // 256 TB
+  test(SIZE_MAX);
+}
+
+TEST(alloc_test, alignment_test) {
+  auto test = [](size_t size, size_t alignment) {
+    char *ptr = reinterpret_cast<char *>(GlobalAllocator::get_instance().alloc(size, alignment));
+    size_t addr = reinterpret_cast<size_t>(ptr);
+    EXPECT_TRUE(ptr != nullptr);
+    EXPECT_TRUE(addr % alignment == 0u);
+    size_t block_size = GlobalAllocator::get_instance().get_block_size(ptr);
+    EXPECT_TRUE(size <= block_size);
+    for (size_t i = 0; i < size; i++) {
+      ptr[i] = 'A';
+    }
+    GlobalAllocator::get_instance().dealloc(ptr);
+  };
+
+  test(1, sizeof(void *));
+  test(15, sizeof(void *));
+  test(123, sizeof(void *));
+  test(getpagesize(), sizeof(void *));
+
+  test(1, getpagesize());
+  test(15, getpagesize());
+  test(123, getpagesize());
+  test(getpagesize(), getpagesize());
+}
+
+TEST(get_block_size_test, write_test) {
+  auto test = [](size_t size, size_t alignment) {
+    char *ptr = reinterpret_cast<char *>(GlobalAllocator::get_instance().alloc(size, alignment));
+    EXPECT_TRUE(ptr != nullptr);
+    size_t block_size = GlobalAllocator::get_instance().get_block_size(ptr);
+    EXPECT_TRUE(size <= block_size);
+    for (size_t i = 0; i < block_size; i++) {
+      ptr[i] = 'A';
+    }
+    GlobalAllocator::get_instance().dealloc(ptr);
+  };
+
+  test(1, 1);
+  test(15, 1);
+  test(123, 1);
+  test(getpagesize(), 1);
+
+  test(1, 64);
+  test(15, 64);
+  test(123, 64);
+  test(getpagesize(), 64);
 }
 
 // is alloc_zeroed properly initialized with 0 ?
