@@ -7,6 +7,8 @@
 #include <iostream>
 #include <gtest/gtest.h>
 
+#include "heaphook/utils.hpp"
+
 using malloc_type = void * (*)(size_t);
 using free_type = void (*)(void *);
 using calloc_type = void * (*)(size_t, size_t);
@@ -193,81 +195,66 @@ TEST(posix_memalign_test, invalid_alignment_test) {
   test(24, 100);
 }
 
-// //========================================//
-// //                memalign                //
-// //========================================//
-// TEST(memalign_test, valid_size_test) {
-//   auto test = [](size_t alignment, size_t size) {
-//     EXPECT_NE(nullptr, glibc_memalign(alignment, size));
-//     EXPECT_NE(nullptr, memalign(alignment, size));
-//   };
+TEST(memalign_test, valid_args_test) {
+  auto test = [](size_t alignment, size_t size) {
+    void *ptr = memalign(alignment, size);
+    size_t addr = reinterpret_cast<size_t>(ptr);
+    EXPECT_NE(ptr, nullptr);
+    EXPECT_EQ(addr % alignment, 0u);
+    EXPECT_LE(size, malloc_usable_size(ptr));
+    memset(ptr, 'A', size);
+    free(ptr);
+  };
 
-//   test(0x20, 0);
-//   test(0x20, 1);
-//   test(0x20, 20);
-//   test(0x20, 100);
-//   test(0x20, getpagesize());
-// }
+  test(sizeof(void *), 0);
+  test(sizeof(void *), 1);
+  test(sizeof(void *), 123);
+  test(sizeof(void *), getpagesize());
+  test(getpagesize(), 0);
+  test(getpagesize(), 1);
+  test(getpagesize(), 123);
+  test(getpagesize(), getpagesize());
+}
 
-// TEST(memalign_test, invalid_size_test) {
-//   auto test = [](size_t alignment, size_t size) {
-//     EXPECT_EQ(nullptr, glibc_memalign(alignment, size));
-//     EXPECT_EQ(nullptr, memalign(alignment, size));
-//   };
+TEST(memalign_test, invalid_size_test) {
+  auto test = [](size_t alignment, size_t size) {
+    errno = 0;
+    void *ptr = memalign(alignment, size);
+    EXPECT_EQ(ptr, nullptr);
+    EXPECT_EQ(errno, ENOMEM);
+  };
 
-//   test(0x20, SIZE_MAX); // too large size to allocate
-// }
+  test(sizeof(void *), 0x1000000000000);
+  test(0x1000000000000, 0x1000000000000);
+  test(0x1000000000000, 1);
+}
 
-// TEST(memalign_test, valid_alignment_test) {
-//   auto test_memalign = [](memalign_type f, size_t alignment, size_t size) {
-//     void *ptr = f(alignment, size);
-//     size_t addr = reinterpret_cast<size_t>(ptr);
-//     EXPECT_NE(nullptr, ptr); // not nullptr
-//     EXPECT_LE(size, malloc_usable_size(ptr));
-//     EXPECT_EQ(0ull, addr % alignment);
-//     free(ptr);
-//   };
+TEST(memalign_test, invalid_alignment_test) {
+  auto test = [](size_t alignment, size_t size) {
+    void *ptr = memalign(alignment, size);
+    size_t addr = reinterpret_cast<size_t>(ptr);
+    EXPECT_NE(ptr, nullptr);
+    EXPECT_LE(size, malloc_usable_size(ptr));
+    alignment = next_power_of_2(alignment);
+    EXPECT_EQ(addr % alignment, 0u);
+    memset(ptr, 'A', size);
+    free(ptr);
+  };
 
-//   auto test = [test_memalign](size_t alignment, size_t size) {
-//     test_memalign(glibc_memalign, alignment, size);
-//     test_memalign(memalign, alignment, size);
-//   };
+  test(0, 100);
+  test(1, 100);
+  test(2, 100);
+  test(7, 100);
+  test(24, 100);
+  test(getpagesize() - 1, 100);
+  test(getpagesize() + 1, 100);
 
-//   test(sizeof(void *), 100);
-//   test(0x10, 100);
-//   test(0x20, 100);
-//   test(0x100, 100);
-//   test(getpagesize(), 100);
-//   test(getpagesize(), getpagesize());
-// }
-
-// // Even if an invalid alignment is received, memalign allocates memory.
-// TEST(memalign_test, invalid_alignment_test) {
-//   auto test_memalign = [](memalign_type f, size_t alignment, size_t size) {
-//     void *ptr = f(alignment, size);
-//     size_t addr = reinterpret_cast<size_t>(ptr);
-//     EXPECT_NE(nullptr, ptr); // not nullptr
-//     EXPECT_LE(size, malloc_usable_size(ptr));
-//     int powcnt = 0;
-//     while (addr > 0 && addr % 2 == 0) {
-//       powcnt++;
-//       addr >>= 1;
-//     }
-//     EXPECT_LE(alignment, 1ull << powcnt);
-//     free(ptr);
-//   };
-
-//   auto test = [test_memalign](size_t alignment, size_t size) {
-//     test_memalign(glibc_memalign, alignment, size);
-//     test_memalign(memalign, alignment, size);
-//   };
-  
-//   test(0, 100);
-//   test(1, 100);
-//   test(7, 100);
-//   test(15, 100);
-//   test(getpagesize() + 1, getpagesize());
-// }
+  // alignment > 0x80000000'00000000
+  errno = 0;
+  void *ptr = memalign(0x8000000000000001, 100);
+  EXPECT_EQ(ptr, nullptr);
+  EXPECT_EQ(errno, EINVAL);
+}
 
 // TEST(heaphook, valloc) {
 //   auto test = [](size_t size, bool is_nullptr, int expected_errno) {
