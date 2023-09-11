@@ -14,41 +14,7 @@ find_package(tlsf REQUIRED)
 
 find_package(ament_cmake_gtest REQUIRED)
 
-# heaphook implementations
-set(HEAPHOOK_SOURCES
-  src/heaphook/heaptracer.cpp
-  src/heaphook/hook_functions.cpp
-  src/heaphook/heaphook.cpp
-  src/heaphook/utils.cpp)
-
-# build library
-function(build_library LIB_NAME_AND_SOURCES) # === build_library ===
-  list(GET ARGV 0 LIB_NAME)
-  list(REMOVE_AT ARGV 0)
-  set(SOURCES ${ARGV})
-
-  add_library(${LIB_NAME} SHARED ${SOURCES} ${HEAPHOOK_SOURCES})
-  target_include_directories(${LIB_NAME}
-    PRIVATE ${PROJECT_SOURCE_DIR}/include)
-  # version script
-  set_target_properties(${LIB_NAME} PROPERTIES LINK_FLAGS "-Wl,--version-script=${CMAKE_SOURCE_DIR}/Versions")
-
-  install(TARGETS ${LIB_NAME}
-    DESTINATION lib)
-endfunction() # === build_library ===
-
-function(test_library LIB_NAME_AND_SOURCES) # === test_library ===
-  list(GET ARGV 0 TEST_NAME)
-  list(REMOVE_AT ARGV 0)
-  set(SOURCES ${ARGV})
-
-  ament_add_gtest(${TEST_NAME} test/test_allocator.cpp ${SOURCES} ${HEAPHOOK_SOURCES})
-  target_include_directories(${TEST_NAME}
-    PRIVATE ${PROJECT_SOURCE_DIR}/include)
-  
-  install(TARGETS ${TEST_NAME}
-    DESTINATION lib)
-endfunction() # === test_library ===
+include(project_utils.cmake)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -61,7 +27,6 @@ if(BUILD_TESTING)
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 
-  # ========== google test ==========
   # heaphook itself test
   ament_add_gtest(test_glibc test/test_heaphook.cpp)
   target_include_directories(test_glibc
@@ -82,7 +47,6 @@ if(BUILD_TESTING)
   test_library(test_preloaded_tlsf
     src/tlsf/tlsf.cpp)
   target_link_libraries(test_preloaded_tlsf tlsf::tlsf)
-  # =================================
 endif()
 
 add_executable(app src/app.cpp)
