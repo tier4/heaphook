@@ -226,7 +226,6 @@ TEST(memalign_test, invalid_size_test) {
 
   test(sizeof(void *), 0x1000000000000);
   test(0x1000000000000, 0x1000000000000);
-  test(0x1000000000000, 1);
 }
 
 TEST(memalign_test, invalid_alignment_test) {
@@ -255,6 +254,58 @@ TEST(memalign_test, invalid_alignment_test) {
   EXPECT_EQ(ptr, nullptr);
   EXPECT_EQ(errno, EINVAL);
 }
+
+TEST(aligned_alloc_test, valid_args_test) {
+  auto test = [](size_t alignment, size_t size) {
+    void *ptr = aligned_alloc(alignment, size);
+    size_t addr = reinterpret_cast<size_t>(ptr);
+    EXPECT_NE(ptr, nullptr);
+    EXPECT_EQ(addr % alignment, 0u);
+    EXPECT_LE(size, malloc_usable_size(ptr));
+    memset(ptr, 'A', size);
+    free(ptr);
+  };
+
+  test(sizeof(void *), 0);
+  test(sizeof(void *), 1);
+  test(sizeof(void *), 123);
+  test(sizeof(void *), getpagesize());
+  test(getpagesize(), 0);
+  test(getpagesize(), 1);
+  test(getpagesize(), 123);
+  test(getpagesize(), getpagesize());
+}
+
+TEST(aligned_alloc_test, invalid_size_test) {
+  auto test = [](size_t alignment, size_t size) {
+    errno = 0;
+    void *ptr = aligned_alloc(alignment, size);
+    EXPECT_EQ(ptr, nullptr);
+    EXPECT_EQ(errno, ENOMEM);
+  };
+
+  test(sizeof(void *), 0x1000000000000);
+  test(0x1000000000000, 0x1000000000000);
+}
+
+// Until GLIBC 2.35, it had the same behavior as memalign.
+// TEST(aligned_alloc_test, invalid_alignment_test) {
+//   auto test = [](size_t alignment, size_t size) {
+//     errno = 0;
+//     void *ptr = aligned_alloc(alignment, size);
+//     EXPECT_EQ(ptr, nullptr);
+//     EXPECT_EQ(errno, EINVAL);
+//   };
+
+//   test(0, 100);
+//   test(1, 100);
+//   test(2, 100);
+//   test(7, 100);
+//   test(24, 100);
+//   test(getpagesize() - 1, 100);
+//   test(getpagesize() + 1, 100);
+//   test(0x8000000000000001, 100);
+// }
 
 // TEST(heaphook, valloc) {
 //   auto test = [](size_t size, bool is_nullptr, int expected_errno) {
