@@ -307,56 +307,57 @@ TEST(aligned_alloc_test, invalid_size_test) {
 //   test(0x8000000000000001, 100);
 // }
 
-// TEST(heaphook, valloc) {
-//   auto test = [](size_t size, bool is_nullptr, int expected_errno) {
-//     if (is_nullptr) {
-//       errno = 0;
-//       EXPECT_EQ(glibc_valloc(size), nullptr);
-//       EXPECT_EQ(errno, expected_errno);
-//       errno = 0;
-//       EXPECT_EQ(valloc(size), nullptr);
-//       EXPECT_EQ(errno, expected_errno);
-//     } else {
-//       EXPECT_NE(glibc_valloc(size), nullptr);
-//       EXPECT_NE(valloc(size), nullptr);
-//     }
-//   };
+TEST(valloc_test, valid_args_test) {
+  auto test = [](size_t size) {
+    void *ptr = valloc(size);
+    size_t addr = reinterpret_cast<size_t>(ptr);
+    EXPECT_NE(ptr, nullptr);
+    EXPECT_EQ(addr % getpagesize(), 0u);
+    EXPECT_LE(size, malloc_usable_size(ptr));
+    memset(ptr, 'A', size);
+    free(ptr);
+  };
 
-//   test(0, false, 0);
-//   test(120, false, 0);
-//   test(0x1000, false, 0);
-//   test(0x1000'000'000'000, true, ENOMEM);
-// }
+  test(0);
+  test(1);
+  test(123);
+  test(getpagesize());
+}
 
-// TEST(heaphook, PvallocTest) {
-//   auto test = [](size_t size, bool is_nullptr, int expected_errno) {
-//     if (is_nullptr) {
-//       errno = 0;
-//       EXPECT_EQ(glibc_pvalloc(size), nullptr);
-//       EXPECT_EQ(errno, expected_errno);
-//       errno = 0;
-//       EXPECT_EQ(pvalloc(size), nullptr);
-//       EXPECT_EQ(errno, expected_errno);
-//     } else {
-//       EXPECT_NE(glibc_pvalloc(size), nullptr);
-//       EXPECT_NE(pvalloc(size), nullptr);
-//     }
-//   };
+TEST(valloc_test, invalid_size_test) {
+  errno = 0;
+  void *ptr = valloc(0x1000000000000);
+  EXPECT_EQ(ptr, nullptr);
+  EXPECT_EQ(errno, ENOMEM);
+}
 
-//   test(0, false, 0);
-//   test(120, false, 0);
-//   test(0x1000, false, 0);
-//   test(0x1000'000'000'000, true, ENOMEM);
-// }
+TEST(pvalloc_test, valid_size_test) {
+  auto test = [](size_t size) {
+    void *ptr = pvalloc(size);
+    size_t addr = reinterpret_cast<size_t>(ptr);
+    EXPECT_NE(ptr, nullptr);
+    EXPECT_EQ(addr % getpagesize(), 0u);
+    EXPECT_LE(size, malloc_usable_size(ptr));
+    EXPECT_LE((size + getpagesize() - 1) & ~(getpagesize() - 1), malloc_usable_size(ptr));
+    memset(ptr, 'A', size);
+    free(ptr);
+  };
 
-// TEST(heaphook, MallocUsableSizeTest) {
-//   auto test = [](size_t size) {
-//     EXPECT_EQ(glibc_malloc_usable_size(glibc_malloc(size)), malloc_usable_size(malloc(size)));
-//   };
+  test(0);
+  test(1);
+  test(123);
+  test(getpagesize());
+  test(2 * getpagesize() + 1);
+}
 
-//   test(0);
-//   test(1);
-//   test(0x20);
-//   test(0x1000);
-//   test(0xbeef);
-// }
+TEST(pvalloc_test, invalid_size_test) {
+  auto test = [](size_t size) {
+    errno = 0;
+    void *ptr = pvalloc(size);
+    EXPECT_EQ(ptr, nullptr);
+    EXPECT_EQ(errno, ENOMEM);
+  };
+
+  test(0x1000000000000);
+  test(SIZE_MAX);
+}
