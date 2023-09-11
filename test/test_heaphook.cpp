@@ -3,8 +3,11 @@
 #include <malloc.h> // memalign, pvalloc
 #include <dlfcn.h>
 
+#include <cstdint>
 #include <iostream>
 #include <gtest/gtest.h>
+
+#include "heaphook/utils.hpp"
 
 using malloc_type = void * (*)(size_t);
 using free_type = void (*)(void *);
@@ -71,7 +74,7 @@ size_t glibc_malloc_usable_size(void *ptr) {
 }
 
 // Is the timing of returning nullptr the same ?
-TEST(HeaphookTest, MallocTest) {
+TEST(heaphook, malloc) {
   // test if the timing of returning nullptr is the same.
   auto test = [](size_t size, bool is_nullptr, int expected_errno) {
     if (is_nullptr) {
@@ -91,10 +94,10 @@ TEST(HeaphookTest, MallocTest) {
   test(0, false, 0);
   test(1, false, 0);
   test(0x20, false, 0);
-  test(0xdeadbeefcafeba, true, ENOMEM); // exceeding the maximum size
+  test(SIZE_MAX, true, ENOMEM); // exceeding the maximum size
 }
 
-TEST(HeaphookTest, CallocTest) {
+TEST(heaphook, calloc) {
   // test if the timing of returning nullptr is the same.
   auto test = [](size_t num, size_t size, bool is_nullptr, int expected_errno) {
     if (is_nullptr) {
@@ -117,10 +120,10 @@ TEST(HeaphookTest, CallocTest) {
   test(0, 0x10, false, 0);
   test(0x10, 0x10, false, 0);
   test(0xdeadbeef, 0xcafebabe, true, ENOMEM); // allocation failed due to size being too large
-  test(0x100000000, 0x100000000, true, ENOMEM); // overflow
+  test(SIZE_MAX, SIZE_MAX, true, ENOMEM); // overflow
 }
 
-TEST(HeaphookTest, ReallocTest1) {
+TEST(heaphook, realloc) {
   auto test = [](size_t old_size, size_t new_size, bool is_nullptr, int expected_errno) {
     if (is_nullptr) {
       errno = 0;
@@ -142,7 +145,7 @@ TEST(HeaphookTest, ReallocTest1) {
   test(0x20, 0x10000000000, true, ENOMEM);
 }
 
-TEST(HeaphookTest, ReallocTest2) {
+TEST(heaphook, realloc2) {
   // the case where nullptr is passed
   auto test = [](size_t new_size, bool is_nullptr, int expected_errno) {
     if (is_nullptr) {
@@ -164,7 +167,7 @@ TEST(HeaphookTest, ReallocTest2) {
   test(0xdeadbeefcafeba, true, ENOMEM);
 }
 
-TEST(HeaphookTest, PosixMemalignTest) {
+TEST(heaphook, posix_memalign) {
   auto test = [](size_t size, size_t alignment, bool is_nullptr, int retval) {
     void *glibc_ptr = nullptr;
     void *heaphook_ptr = nullptr;
@@ -195,7 +198,84 @@ TEST(HeaphookTest, PosixMemalignTest) {
   test(0x1'000'000'000'000, 1, true, EINVAL); // too large size
 }
 
-TEST(HeaphookTest, VallocTest) {
+
+//========================================//
+//                memalign                //
+//========================================//
+TEST(memalign_test, valid_size_test) {
+  auto test = [](size_t alignment, size_t size) {
+    EXPECT_NE(nullptr, glibc_memalign(alignment, size));
+    EXPECT_NE(nullptr, memalign(alignment, size));
+  };
+
+  test(0x20, 0);
+  test(0x20, 1);
+  test(0x20, 20);
+  test(0x20, 100);
+  test(0x20, getpagesize());
+}
+
+TEST(memalign_test, invalid_size_test) {
+  auto test = [](size_t alignment, size_t size) {
+    EXPECT_EQ(nullptr, glibc_memalign(alignment, size));
+    EXPECT_EQ(nullptr, memalign(alignment, size));
+  };
+
+  test(0x20, SIZE_MAX); // too large size to allocate
+}
+
+TEST(memalign_test, valid_alignment_test) {
+  auto test_memalign = [](memalign_type f, size_t alignment, size_t size) {
+    void *ptr = f(alignment, size);
+    size_t addr = reinterpret_cast<size_t>(ptr);
+    EXPECT_NE(nullptr, ptr); // not nullptr
+    EXPECT_LE(size, malloc_usable_size(ptr));
+    EXPECT_EQ(0ull, addr % alignment);
+    free(ptr);
+  };
+
+  auto test = [test_memalign](size_t alignment, size_t size) {
+    test_memalign(glibc_memalign, alignment, size);
+    test_memalign(memalign, alignment, size);
+  };
+
+  test(sizeof(void *), 100);
+  test(0x10, 100);
+  test(0x20, 100);
+  test(0x100, 100);
+  test(getpagesize(), 100);
+  test(getpagesize(), getpagesize());
+}
+
+// Even if an invalid alignment is received, memalign allocates memory.
+TEST(memalign_test, invalid_alignment_test) {
+  auto test_memalign = [](memalign_type f, size_t alignment, size_t size) {
+    void *ptr = f(alignment, size);
+    size_t addr = reinterpret_cast<size_t>(ptr);
+    EXPECT_NE(nullptr, ptr); // not nullptr
+    EXPECT_LE(size, malloc_usable_size(ptr));
+    int powcnt = 0;
+    while (addr > 0 && addr % 2 == 0) {
+      powcnt++;
+      addr >>= 1;
+    }
+    EXPECT_LE(alignment, 1ull << powcnt);
+    free(ptr);
+  };
+
+  auto test = [test_memalign](size_t alignment, size_t size) {
+    test_memalign(glibc_memalign, alignment, size);
+    test_memalign(memalign, alignment, size);
+  };
+  
+  test(0, 100);
+  test(1, 100);
+  test(7, 100);
+  test(15, 100);
+  test(getpagesize() + 1, getpagesize());
+}
+
+TEST(heaphook, valloc) {
   auto test = [](size_t size, bool is_nullptr, int expected_errno) {
     if (is_nullptr) {
       errno = 0;
@@ -216,7 +296,7 @@ TEST(HeaphookTest, VallocTest) {
   test(0x1000'000'000'000, true, ENOMEM);
 }
 
-TEST(HeaphookTest, PvallocTest) {
+TEST(heaphook, PvallocTest) {
   auto test = [](size_t size, bool is_nullptr, int expected_errno) {
     if (is_nullptr) {
       errno = 0;
@@ -237,7 +317,7 @@ TEST(HeaphookTest, PvallocTest) {
   test(0x1000'000'000'000, true, ENOMEM);
 }
 
-TEST(HeaphookTest, MallocUsableSizeTest) {
+TEST(heaphook, MallocUsableSizeTest) {
   auto test = [](size_t size) {
     EXPECT_EQ(glibc_malloc_usable_size(glibc_malloc(size)), malloc_usable_size(malloc(size)));
   };
