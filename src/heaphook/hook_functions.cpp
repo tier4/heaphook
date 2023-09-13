@@ -30,7 +30,7 @@ static inline void _int_free(void *ptr) {
 static inline void *_int_calloc(size_t num, size_t size) {
   size_t bytes;
   if (__glibc_unlikely(__builtin_mul_overflow (num, size, &bytes))) {
-    write_to_stderr("\n[ heaphook ] calloc: an overflow occurred in multiplication, num = ", num, ", size = ", size, "\n");
+    // write_to_stderr("\n[ heaphook ] calloc: an overflow occurred in multiplication, num = ", num, ", size = ", size, "\n");
     errno = ENOMEM;
     return nullptr;
   }

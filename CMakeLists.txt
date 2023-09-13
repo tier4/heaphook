@@ -74,6 +74,8 @@ if(HAVE_MALLINFO2)
   )
 endif()
 
+build_library(original_allocator src/original_allocator.cpp)
+
 # # This is a demonstration.
 # build_library(my_allocator src/my_allocator.cpp)
 

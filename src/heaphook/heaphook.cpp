@@ -4,9 +4,7 @@
 
 namespace heaphook {
 
-GlobalAllocator::GlobalAllocator() {
-  write_to_stderr("\n💚 heaphook is started 💚\n\n");
-}
+GlobalAllocator::GlobalAllocator() {}
 
 void *GlobalAllocator::alloc(size_t size, size_t align) {
   if constexpr (HeapTraceEnabled) {
