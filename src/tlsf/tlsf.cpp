@@ -195,9 +195,32 @@ class TlfsAllocator : public GlobalAllocator {
     free_no_hook = false;
   }
 
-  size_t do_get_block_size(void * ptr) override {
-    write_to_stderr("\ndo_get_block_size(", ptr, ") is called.\n");
-    return 0;
+  size_t do_get_block_size(void *ptr) override {
+    //               |--------------------|
+    //               |      prev_hdr      |
+    //               |--------------------|
+    //               |        size      |U|
+    //               |--------------------| -+
+    // block_ptr --> |                    |  |
+    //               |--------------------|  | unused size
+    //               |                    |  |
+    //               |--------------------| -+
+    //   buf_ptr --> |       buffer       |
+    //               |--------------------|
+    void *buf_ptr = ptr;
+    size_t buf_addr = reinterpret_cast<size_t>(buf_ptr);
+    auto it = aligned2orig->find(ptr);
+    if (it != aligned2orig->end()) {
+      // If block is aligned, ptr does not point to the beginning of the block.
+      void *block_ptr = it->second;
+      size_t block_addr = reinterpret_cast<size_t>(block_ptr);
+      size_t block_size = (*reinterpret_cast<size_t *>(block_addr - 8)) & (~0b1111ull);
+      size_t unused_size = buf_addr - block_addr;
+      return block_size - unused_size;
+    } else {
+      size_t block_size = (*reinterpret_cast<size_t *>(buf_addr - 8)) & (~0b1111ull);
+      return block_size;
+    }
   }
 
   void *do_realloc(void *ptr, size_t new_size) {
