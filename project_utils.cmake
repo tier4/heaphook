@@ -12,7 +12,7 @@ function(build_library LIB_NAME_AND_SOURCES)
   set(SOURCES ${ARGV})
 
   add_library(${LIB_NAME} SHARED 
-  ${heaphook_SOURCE_DIR}/${SOURCES} 
+    ${SOURCES} 
     ${HEAPHOOK_SOURCES})
 
   target_include_directories(${LIB_NAME}
@@ -31,7 +31,7 @@ function(test_library LIB_NAME_AND_SOURCES) # === test_library ===
 
   ament_add_gtest(${TEST_NAME} 
     ${heaphook_SOURCE_DIR}/test/test_allocator.cpp 
-    ${heaphook_SOURCE_DIR}/${SOURCES} 
+    ${SOURCES} 
     ${HEAPHOOK_SOURCES})
   
   target_include_directories(${TEST_NAME}
