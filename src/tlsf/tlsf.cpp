@@ -103,6 +103,11 @@ static void * tlsf_malloc_wrapped(size_t size)
   return tlsf_allocate_internal([size] {return tlsf_malloc(size);});
 }
 
+static void * tlsf_calloc_wrapped(size_t num, size_t size)
+{
+  return tlsf_allocate_internal([num, size] {return tlsf_calloc(num, size);});
+}
+
 static void * tlsf_realloc_wrapped(void * ptr, size_t new_size)
 {
   return tlsf_allocate_internal([ptr, new_size] {return tlsf_realloc(ptr, new_size);});
@@ -223,7 +228,27 @@ class TlfsAllocator : public GlobalAllocator {
     }
   }
 
-  void *do_realloc(void *ptr, size_t new_size) {
+  void *do_alloc_zeroed(size_t size) override {
+    static calloc_type original_calloc = reinterpret_cast<calloc_type>(dlsym(RTLD_NEXT, "calloc"));
+    static __thread bool calloc_no_hook = false;
+
+    if (calloc_no_hook) {
+      if (mempool_initialized) {
+        return tlsf_calloc_wrapped(size, 1);
+      } else {
+        return original_calloc(size, 1);
+      }
+    }
+
+    calloc_no_hook = true;
+    check_mempool_initialized();
+    void * ret = tlsf_calloc_wrapped(size, 1);
+    calloc_no_hook = false;
+
+    return ret;
+  }
+
+  void *do_realloc(void *ptr, size_t new_size) override {
     static realloc_type original_realloc =
       reinterpret_cast<realloc_type>(dlsym(RTLD_NEXT, "realloc"));
     static __thread bool realloc_no_hook = false;
