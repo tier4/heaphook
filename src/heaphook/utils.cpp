@@ -1,6 +1,7 @@
 #include "heaphook/utils.hpp"
 
-char *format_built_in_type(char *buf, void *ptr) noexcept {
+char * format_built_in_type(char * buf, void * ptr) noexcept
+{
   buf[0] = '0';
   buf[1] = 'x';
   int bits = 8 * sizeof(void *);
@@ -21,14 +22,15 @@ char *format_built_in_type(char *buf, void *ptr) noexcept {
   return buf;
 }
 
-char *format_built_in_type(char *buf, size_t n) noexcept {
+char * format_built_in_type(char * buf, size_t n) noexcept
+{
   if (n == 0) {
     *(buf++) = '0';
     return buf;
   }
   // n != 0
   char tmp[21]; // Maximum value of unsigned long long is 20 digits in decimal
-  char *ptr = &tmp[20];
+  char * ptr = &tmp[20];
   *(ptr--) = '\0';
   while (n) {
     *ptr = '0' + (n % 10);
@@ -42,13 +44,15 @@ char *format_built_in_type(char *buf, size_t n) noexcept {
   return buf;
 }
 
-char *format_built_in_type(char *buf, const char *s) noexcept {
+char * format_built_in_type(char * buf, const char * s) noexcept
+{
   while (*s) {
     *(buf++) = *(s++);
   }
   return buf;
 }
 
-void format(char *buf) noexcept {
+void format(char * buf) noexcept
+{
   *buf = '\0';
 }

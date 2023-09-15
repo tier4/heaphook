@@ -31,7 +31,7 @@ if(BUILD_TESTING)
   ament_add_gtest(test_glibc test/test_heaphook.cpp)
   target_include_directories(test_glibc
     PRIVATE ${PROJECT_SOURCE_DIR}/include)
-  
+
   ament_add_gtest(test_heaphook test/test_heaphook.cpp src/original_allocator ${HEAPHOOK_SOURCES})
   target_include_directories(test_heaphook
     PRIVATE ${PROJECT_SOURCE_DIR}/include)
@@ -39,7 +39,7 @@ if(BUILD_TESTING)
   ament_add_gtest(test_utils test/test_utils.cpp)
   target_include_directories(test_utils
     PRIVATE ${PROJECT_SOURCE_DIR}/include)
-  
+
   # allocator test
   test_library(test_original_allocator
     src/original_allocator.cpp)

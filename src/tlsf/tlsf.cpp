@@ -135,10 +135,13 @@ static void * tlsf_aligned_malloc(size_t alignment, size_t size)
 
 using namespace heaphook;
 
-class TlfsAllocator : public GlobalAllocator {
-  void *do_alloc(size_t size, size_t alignment) override {
+class TlfsAllocator : public GlobalAllocator
+{
+  void * do_alloc(size_t size, size_t alignment) override
+  {
     if (alignment == 1) {
-      static malloc_type original_malloc = reinterpret_cast<malloc_type>(dlsym(RTLD_NEXT, "malloc"));
+      static malloc_type original_malloc =
+        reinterpret_cast<malloc_type>(dlsym(RTLD_NEXT, "malloc"));
       static __thread bool malloc_no_hook = false;
 
       if (malloc_no_hook) {
@@ -173,7 +176,8 @@ class TlfsAllocator : public GlobalAllocator {
     }
   }
 
-  void do_dealloc(void* ptr) override {
+  void do_dealloc(void * ptr) override
+  {
     static free_type original_free = reinterpret_cast<free_type>(dlsym(RTLD_NEXT, "free"));
     static __thread bool free_no_hook = false;
 
@@ -200,7 +204,8 @@ class TlfsAllocator : public GlobalAllocator {
     free_no_hook = false;
   }
 
-  size_t do_get_block_size(void *ptr) override {
+  size_t do_get_block_size(void * ptr) override
+  {
     //               |--------------------|
     //               |      prev_hdr      |
     //               |--------------------|
@@ -212,12 +217,12 @@ class TlfsAllocator : public GlobalAllocator {
     //               |--------------------| -+
     //   buf_ptr --> |       buffer       |
     //               |--------------------|
-    void *buf_ptr = ptr;
+    void * buf_ptr = ptr;
     size_t buf_addr = reinterpret_cast<size_t>(buf_ptr);
     auto it = aligned2orig->find(ptr);
     if (it != aligned2orig->end()) {
       // If block is aligned, ptr does not point to the beginning of the block.
-      void *block_ptr = it->second;
+      void * block_ptr = it->second;
       size_t block_addr = reinterpret_cast<size_t>(block_ptr);
       size_t block_size = (*reinterpret_cast<size_t *>(block_addr - 8)) & (~0b1111ull);
       size_t unused_size = buf_addr - block_addr;
@@ -228,7 +233,8 @@ class TlfsAllocator : public GlobalAllocator {
     }
   }
 
-  void *do_alloc_zeroed(size_t size) override {
+  void * do_alloc_zeroed(size_t size) override
+  {
     static calloc_type original_calloc = reinterpret_cast<calloc_type>(dlsym(RTLD_NEXT, "calloc"));
     static __thread bool calloc_no_hook = false;
 
@@ -248,7 +254,8 @@ class TlfsAllocator : public GlobalAllocator {
     return ret;
   }
 
-  void *do_realloc(void *ptr, size_t new_size) override {
+  void * do_realloc(void * ptr, size_t new_size) override
+  {
     static realloc_type original_realloc =
       reinterpret_cast<realloc_type>(dlsym(RTLD_NEXT, "realloc"));
     static __thread bool realloc_no_hook = false;
@@ -276,7 +283,8 @@ class TlfsAllocator : public GlobalAllocator {
   }
 };
 
-GlobalAllocator &GlobalAllocator::get_instance() {
+GlobalAllocator & GlobalAllocator::get_instance()
+{
   static TlfsAllocator tlfs_allocator;
   return tlfs_allocator;
 }
