@@ -12,6 +12,10 @@ find_package(ament_cmake REQUIRED)
 
 find_package(tlsf REQUIRED)
 
+find_package(ament_cmake_gtest REQUIRED)
+
+include(project_utils.cmake)
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
@@ -22,6 +26,27 @@ if(BUILD_TESTING)
   # a copyright and license is added to all source files
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
+
+  # heaphook itself test
+  ament_add_gtest(test_glibc test/test_heaphook.cpp)
+  target_include_directories(test_glibc
+    PRIVATE ${PROJECT_SOURCE_DIR}/include)
+
+  ament_add_gtest(test_heaphook test/test_heaphook.cpp src/original_allocator ${HEAPHOOK_SOURCES})
+  target_include_directories(test_heaphook
+    PRIVATE ${PROJECT_SOURCE_DIR}/include)
+
+  ament_add_gtest(test_utils test/test_utils.cpp)
+  target_include_directories(test_utils
+    PRIVATE ${PROJECT_SOURCE_DIR}/include)
+
+  # allocator test
+  test_library(test_original_allocator
+    src/original_allocator.cpp)
+
+  test_library(test_preloaded_tlsf
+    src/tlsf/tlsf.cpp)
+  target_link_libraries(test_preloaded_tlsf tlsf::tlsf)
 endif()
 
 add_executable(app src/app.cpp)
@@ -29,7 +54,9 @@ add_executable(app src/app.cpp)
 include(CheckSymbolExists)
 check_symbol_exists(mallinfo2 malloc.h HAVE_MALLINFO2)
 
-add_library(preloaded_heaptrack SHARED src/preloaded.cpp)
+# build preloaded_heaptrack.so
+build_library(preloaded_heaptrack src/original_allocator.cpp)
+target_compile_options(preloaded_heaptrack PRIVATE "-DTRACE")
 if(HAVE_MALLINFO2)
   target_compile_definitions(preloaded_heaptrack
     PRIVATE
@@ -37,7 +64,8 @@ if(HAVE_MALLINFO2)
   )
 endif()
 
-add_library(preloaded_tlsf SHARED src/preloaded_tlsf.cpp)
+# build libpreloaded_tlsf.so
+build_library(preloaded_tlsf src/tlsf/tlsf.cpp)
 target_link_libraries(preloaded_tlsf PRIVATE tlsf::tlsf)
 if(HAVE_MALLINFO2)
   target_compile_definitions(preloaded_tlsf
@@ -45,6 +73,11 @@ if(HAVE_MALLINFO2)
       HAVE_MALLINFO2
   )
 endif()
+
+build_library(original_allocator src/original_allocator.cpp)
+
+# # This is a demonstration.
+# build_library(my_allocator src/my_allocator.cpp)
 
 install(TARGETS preloaded_heaptrack preloaded_tlsf DESTINATION lib)
 install(TARGETS app DESTINATION bin)
