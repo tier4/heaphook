@@ -18,6 +18,7 @@ $ source install/setup.bash
 For now, We provide two kinds of the heaphook libraries.
 - `libpreloaded_heaptrack.so`: Records all the heap allocation/deallocation function calls and generate a log file for visualizing the history of heap consumption.
 - `libpreloaded_tlsf.so`: Replaces all the heap allocation/deallocation with TLSF (Tow-Level Segregated Fit) memory allocator.
+- `libpreloaded_backtrace.so`: Records all malloc/new function calls with their backtraces where the memory allocations take place.
 
 A typical use case is to utilize `libpreloaded_heaptrack` to grasp the transition and maximum value of heap consumtion of the target process
 and to determine the initial allocated memory pool size for `libpreloaded_tlsf`.
@@ -59,6 +60,22 @@ As an example, here is what happens when `malloc(1000)` is called when the exist
 The added memory pool areas are not contiguous with each other in the virual address space,
 so it is not necessarily enough even if the total size of the added memory pools exceeds the size of the memory allocation request. 
 
+### libpreloaded_backtrace.so
+Use the following command to trace the callers:
+```
+$ LD_PRELOAD=libpreloaded_backtrace.so executable
+```
+Two log files are genearted under the working directory in the format of `top_alloc_bytes_bt.{%pid}.{%tid}.log` and `top_num_calls_bt.{%pid}.{%tid}.log`. By default, top 10 callers are logged. The environment variable `NUM_TOPS` can control the number of callers. In addition, callers that just make one malloc/new are not logged as they are not the major source of page faults. To disable it, just set environment variable `SHOW_RECURRENT_CALLERS=1`.
+
+To show the source code file name and the line numbers, run the following command:
+```
+$ python3 backtrace_analyzer.py -i top_alloc_bytes_bt.{%pid}.{%tid}.log
+or
+$ python3 backtrace_analyzer.py -i top_alloc_bytes_bt.{%pid}.{%tid}.log | c++filt  // demangle C++ function names
+```
+
+The result will be more user-friendly if the executables are linked with `-rdynamic -no-pie -fno-pie` options. Or even aggressive, build your code with `CMAKE_BUILD_TYPE=RelWithDebInfo`.
+
 ## Integrate with ROS2 launch
 You can easily integrate `heaphook` with ROS2 launch systems.
 From the launch file, you can replace all heap allocations of the process corresponding to the targeted `Node` and `ComposableNodeContainer`.
@@ -71,7 +88,7 @@ From the launch file, you can replace all heap allocations of the process corres
 
 ```xml
 <node pkg="..." exec="..." name="...">
-  <env name="LD_PRELOAD" value="libpreloaded_tlsf.so />
+  <env name="LD_PRELOAD" value="libpreloaded_tlsf.so" />
   <env name="INITIAL_MEMPOOL_SIZE" value="100000000" />
   <env name="ADDITIONAL_MEMPOOL_SIZE" value="100000000" />
 </node>
