@@ -47,9 +47,14 @@ if(BUILD_TESTING)
   test_library(test_preloaded_tlsf
     src/tlsf/tlsf.cpp)
   target_link_libraries(test_preloaded_tlsf tlsf::tlsf)
+
+  test_library(test_preloaded_backtrace src/backtrace_allocator.cpp)
+  target_link_options(test_preloaded_backtrace PRIVATE -rdynamic -no-pie -fno-pie)
 endif()
 
 add_executable(app src/app.cpp)
+# Make backtrace show file name and line number
+target_link_options(app PRIVATE -rdynamic -no-pie -fno-pie)
 
 include(CheckSymbolExists)
 check_symbol_exists(mallinfo2 malloc.h HAVE_MALLINFO2)
@@ -75,11 +80,13 @@ if(HAVE_MALLINFO2)
 endif()
 
 build_library(original_allocator src/original_allocator.cpp)
+build_library(preloaded_backtrace src/backtrace_allocator.cpp)
+
 
 # # This is a demonstration.
 # build_library(my_allocator src/my_allocator.cpp)
 
-install(TARGETS preloaded_heaptrack preloaded_tlsf DESTINATION lib)
+install(TARGETS preloaded_heaptrack preloaded_tlsf preloaded_backtrace DESTINATION lib)
 install(TARGETS app DESTINATION bin)
 
 ament_package()
