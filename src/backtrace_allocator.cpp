@@ -158,9 +158,9 @@ private:
 
     // We usually care about recurrent calls. If a call site just make one malloc,
     // it is not usually the target that we want to optimize away;
-    bool show_recurrent_callers = false;
-    if (getenv("SHOW_RECURRENT_CALLERS") && getenv("SHOW_RECURRENT_CALLERS")[0] == '1') {
-      show_recurrent_callers = true;
+    bool show_non_recurrent_callers = false;
+    if (getenv("SHOW_NON_RECURRENT_CALLERS") && getenv("SHOW_NON_RECURRENT_CALLERS")[0] == '1') {
+      show_non_recurrent_callers = true;
     }
 
     using bt_record_pair_t = std::pair<BackTrace, AllocRecord>;
@@ -181,7 +181,7 @@ private:
     std::priority_queue<bt_record_pair_t, std::vector<bt_record_pair_t>, decltype(cmp)> min_pq(cmp);
 
     for (const auto & [bt, record] : alloc_records_) {
-      if (show_recurrent_callers || record.num_calls_ > 1) {
+      if (show_non_recurrent_callers || record.num_calls_ > 1) {
         min_pq.push(bt_record_pair_t{bt, record});
         while (min_pq.size() > num_tops) {
           min_pq.pop();

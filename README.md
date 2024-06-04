@@ -65,7 +65,7 @@ Use the following command to trace the callers:
 ```
 $ LD_PRELOAD=libpreloaded_backtrace.so executable
 ```
-Two log files are genearted under the working directory in the format of `top_alloc_bytes_bt.{%pid}.{%tid}.log` and `top_num_calls_bt.{%pid}.{%tid}.log`. By default, top 10 callers are logged. The environment variable `NUM_TOPS` can control the number of callers. In addition, callers that just make one malloc/new are not logged as they are not the major source of page faults. To disable it, just set environment variable `SHOW_RECURRENT_CALLERS=1`.
+Two log files are genearted under the working directory in the format of `top_alloc_bytes_bt.{%pid}.{%tid}.log` and `top_num_calls_bt.{%pid}.{%tid}.log`. By default, top 10 callers are logged. The environment variable `NUM_TOPS` can control the number of callers. In addition, callers that just make one malloc/new are not logged as they are not the major source of page faults. To disable it, just set environment variable `SHOW_NON_RECURRENT_CALLERS=1`.
 
 To show the source code file name and the line numbers, run the following command:
 ```
